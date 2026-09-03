@@ -105,7 +105,7 @@
      tombolnya yg pointer-events:auto — supaya pan/drag pd area kosong tetap jalan.
      Radius chip 12px mengikuti radius kartu, latar semi-transparan agar grid tetap
      terbaca di bawahnya. */
-  .plane-card .toolbar{position:absolute;top:32px;right:16px;left:auto;width:auto;z-index:6;margin:0;pointer-events:none;}
+  .plane-card .toolbar{position:absolute;top:26px;right:16px;left:auto;width:auto;z-index:6;margin:0;pointer-events:none;}
   .plane-card .toolbar .mini-btn{pointer-events:auto;background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:12px;box-shadow:0 1px 4px rgba(22,35,58,.14);padding:3px 11px;font-size:11px;font-weight:500;color:var(--ink-soft);}
   .plane-card .toolbar .mini-btn:hover{border-color:var(--blue);color:var(--blue);}
   .plane-card svg{display:block;margin:0 auto;}
@@ -896,26 +896,32 @@ function renderPlane(m,decisions){
      legenda (fallback 640×470 utk stub tes tanpa layout). fitPlane menyetel style & viewBox
      lalu render ulang saat ukuran berubah. */
   const VBW=Math.round(svg.clientWidth)||640, VBH=Math.round(svg.clientHeight)||470;
-  /* padT=14: headroom kecil atas utk judul sumbu X & label — toolbar zoom kini chip
-     yg melayang DI DALAM plot (pojok kanan-atas), tak lagi band yg memakan tinggi */
-  const padL=38,padR=12,padT=14,padB=26;
+  /* padT=10: headroom minimal atas — toolbar zoom chip melayang DI DALAM plot
+     (pojok kanan-atas), tak ada band kosong yg memakan tinggi */
+  const padL=38,padR=12,padT=10,padB=26;
   const plotW=VBW-padL-padR, plotH=VBH-padT-padB;
   const view=S.ui.view;
 
   /* batas data = union bentuk zona (global, via gz) + titik gangguan semua relay nyala.
      Zona beban TIDAK diikutkan — overlay, tidak boleh mengubah skala. */
   let minR=0,maxR=0,minX=0,maxX=0;
+  /* dMinR/dMaxR/dMinX/dMaxX = batas konten yg BENAR-BENAR DIGAMBAR (zona via gz,
+     termasuk pencerminan relay rev) — dipakai clamp no-cut di bawah. */
+  let dMinR=0,dMaxR=0,dMinX=0,dMaxX=0;
   const grow=z=>{minR=Math.min(minR,z.R);maxR=Math.max(maxR,z.R);minX=Math.min(minX,z.X);maxX=Math.max(maxX,z.X);};
   const growBounds=b=>{grow(C(b.minR,b.minX));grow(C(b.maxR,b.maxX));};
+  const dgrow=z=>{dMinR=Math.min(dMinR,z.R);dMaxR=Math.max(dMaxR,z.R);dMinX=Math.min(dMinX,z.X);dMaxX=Math.max(dMaxX,z.X);};
+  const dgrowBounds=(r,b)=>{[C(b.minR,b.minX),C(b.maxR,b.maxX),C(b.minR,b.maxX),C(b.maxR,b.minX)].forEach(p=>dgrow(gz(r,p,m)));};
   S.relays.forEach(r=>{
     if(!r.enabled) return;
     const zone=relayZones(r,m);
     [zone.zone1,zone.zone2,zone.zone3].forEach(zn=>{
       const b=shapeBounds(charShape(r,zn,zone,m));   // geometri dari modul karakteristik
       growBounds({minR:b.minR,maxR:b.maxR,minX:b.minX,maxX:b.maxX});
+      dgrowBounds(r,b);
     });
     const fzr=relayFaultZ(r,m);
-    if(!fzr.behind){ grow(gz(r,fzr.zl,m)); grow(gz(r,fzr.z,m)); grow(gz(r,fzr.zm,m)); }
+    if(!fzr.behind){ grow(gz(r,fzr.zl,m)); grow(gz(r,fzr.z,m)); grow(gz(r,fzr.zm,m)); dgrow(gz(r,fzr.zl,m)); dgrow(gz(r,fzr.z,m)); dgrow(gz(r,fzr.zm,m)); }
   });
   if(maxR<=minR){maxR=1;} if(maxX<=minX){maxX=1;}
 
@@ -924,12 +930,25 @@ function renderPlane(m,decisions){
   if(spanR/spanX<targetRatio){const extra=spanX*targetRatio-spanR; maxR+=extra*0.85; minR-=extra*0.15;}
   else{const extra=spanR/targetRatio-spanX; maxX+=extra;}
   spanR=maxR-minR; spanX=maxX-minX;
-  /* Jendela default DIPERLEBAR: kedua sumbu ×1.26 (margin kiri–kanan lega & rata).
-     Kedua span dikalikan bersama → rasio sumbu tak berubah, lingkaran tetap bulat;
-     window tetap berpusat di origin (0,0) sehingga kurva tampak seimbang. */
-  const WIDE=1.26;
+  const cx0=(minR+maxR)/2, cy0=(minX+maxX)/2;   // pusat data (frame)
+  /* Jendela default DIPEPETKAN ke konten: ×0.82 (k=1 merapat — RX diagram mengisi
+     kartu, zone-1 masih penuh vertikal). Kedua span dikalikan bersama → rasio dijaga,
+     lingkaran tetap bulat. */
+  const WIDE=0.82;
   spanR*=WIDE; spanX*=WIDE;
-  const cx0=(minR+maxR)/2, cy0=(minX+maxX)/2;   // pusat data
+  /* Clamp NO-CUT (hanya di fit default dgn pusat origin): bila konten yg DIGAMBAR
+     (zona setelah gz, dgn margin 0.25 Ω) bakal terpotong di kiri/kanan — mis. kanvas
+     persegi — jendela R dilebarkan secukupnya agar kurva tak pernah terpotong sisi.
+     Nonaktif saat user sudah pan/zoom (k≠1 atau cx/cy bergeser) agar tak melawan
+     interaksi. */
+  const dSpan=Math.max(dMaxR-dMinR,1e-9);
+  const atFit = view.k===1 && (view.cx===undefined||view.cx===null||view.cx===0) && (view.cy===undefined||view.cy===null||view.cy===0);
+  if(atFit && dSpan>0){
+    const wc = (view.cx===undefined||view.cx===null) ? cx0 : view.cx;
+    const mR=0.25;
+    const need=Math.max(spanR, (wc-(dMinR-mR))*2, ((dMaxR+mR)-wc)*2);
+    if(need>spanR){ spanR=need; spanX=spanR/targetRatio; }
+  }
   /* ZOOM = jendela data. k: 1=jendela ~span data; <1=jendela LUAS (thumbnail, angka
      mengecil, kotak tetap penuh & linear); >1=jendela sempit (detail angka). Pusat
      jendela (cx,cy) dalam koordinat DATA. toPx memetakan titik -> piksel plot TETAP. */
@@ -962,13 +981,13 @@ function renderPlane(m,decisions){
   for(let rv=rStart; rv<=rEnd+stepR*1e-6; rv+=stepR){
     const a=toPx(C(rv,0));
     s+=`<line x1="${a.x}" y1="${yTop}" x2="${a.x}" y2="${yBot}" stroke="var(--line)" stroke-width="1"/>`;
-    s+=`<text x="${a.x}" y="${VBH-padB+14}" font-family="JetBrains Mono" font-size="9" fill="var(--ink-soft)" text-anchor="middle">${fmt(rv,decR)}</text>`;
+    s+=`<text x="${a.x}" y="${VBH-padB+14}" font-family="JetBrains Mono" font-size="9" fill="var(--ink-soft)" stroke="var(--surface)" stroke-width="3" paint-order="stroke" text-anchor="middle">${fmt(rv,decR)}</text>`;
   }
   const xStart=Math.ceil(pxToX(yBot)/stepX)*stepX, xEnd=Math.floor(pxToX(yTop)/stepX)*stepX;
   for(let xv=xStart; xv<=xEnd+stepX*1e-6; xv+=stepX){
     const c=toPx(C(0,xv));
     s+=`<line x1="${xL}" y1="${c.y}" x2="${xR2}" y2="${c.y}" stroke="var(--line)" stroke-width="1"/>`;
-    s+=`<text x="${padL-5}" y="${c.y+3}" font-family="JetBrains Mono" font-size="9" fill="var(--ink-soft)" text-anchor="end">${fmt(xv,decX)}</text>`;
+    s+=`<text x="${padL-5}" y="${c.y+3}" font-family="JetBrains Mono" font-size="9" fill="var(--ink-soft)" stroke="var(--surface)" stroke-width="3" paint-order="stroke" text-anchor="end">${fmt(xv,decX)}</text>`;
   }
   /* garis sumbu nol — melintang penuh plot saat 0 di dalam window */
   const R0=toPx(C(0,0));

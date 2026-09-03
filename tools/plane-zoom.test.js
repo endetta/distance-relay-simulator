@@ -5,9 +5,10 @@
        di Chrome) = zoom IN, arah dibalik dari perilaku lama yg terbalik; kuat-menengah
        ≈ ×1.08 per 10 px; simetris f(−x)=1/f(x).
    (C) renderPlane adaptif — kanvas mengikuti ukuran elemen (#plane clientWidth/Height).
-   (D) Jendela R–X DIPERLEBAR — window default memakai rentang lebih luas dgn margin
-       rata kiri–kanan (fit data ×1.26, bulat tetap bulat): di kanvas 720×430 label
-       tick sumbu R mencapai −6..6 (bukan −4..4) dan sumbu X −3..3.
+   (D) Jendela R–X DIPEPETKAN ke kartu — k=1 merapat ke konten (×0.82, bulat tetap
+       bulat): di kanvas 720×430 label tick R −4..4 & X −2..2; plus clamp NO-CUT di
+       fit default supaya konten yg digambar tak pernah terpotong kiri/kanan.
+   (E) Label tick R & X membawa halo putih (paint-order stroke) agar terbaca di atas kurva.
    Stub harness tak punya CSS/layout → #plane.clientWidth di-set manual utk mensimulasikan
    kotak kanvas sebenarnya; tanpa nilai → fallback 640×470.
 */
@@ -122,32 +123,85 @@ console.log('\nrenderPlane — kanvas mengikuti ukuran elemen (fill card)');
   check('tanpa ukuran elemen: fallback 640×470 (y tick = 458)', () => contains(svg, 'y="458"', 'fallback'));
 }
 
-/* ============ Seam D: jendela R–X DIPERLEBAR (margin rata, kurva tetap bulat) ============ */
-console.log('\nrenderPlane — jendela data diperlebar (sumbu R ± lebih luas, simetris)');
+/* ============ Seam D: jendela DIPEPETKAN — RX diagram mengisi kartu ============
+   WIDE<1 membuat k=1 merapat ke konten (margin kiri–kanan kecil), plus clamp
+   no-cut: di fit default jendela R otomatis melebar bila kurva DIGAMBAR akan
+   terpotong sisi (kanvas persegi). Lingkaran tetap bulat (rasio dijaga). */
+console.log('\nrenderPlane — jendela dipepetkan (isi kartu, tanpa potong kurva)');
+/* ambil ekstrem px zona (lingkaran & rect dgn fill zona) thd kotak plot */
+function zoneExtremes(svg, padL, plotW) {
+  let lmn = 1e9, lmx = -1e9;
+  for (const m2 of svg.matchAll(/<circle cx="(-?[\d.]+)" cy="(-?[\d.]+)" r="([\d.]+)" fill="var\(--(?:red|copper|blue)\)"/g)) {
+    const x = +m2[1], r = +m2[3]; if (x - r < lmn) lmn = x - r; if (x + r > lmx) lmx = x + r;
+  }
+  for (const m2 of svg.matchAll(/<rect x="(-?[\d.]+)" y="[\d.]+" width="([\d.]+)" height="[\d.]+" fill="var\(--(?:red|copper|blue)\)"/g)) {
+    const x = +m2[1], wd = +m2[2]; if (x < lmn) lmn = x; if (x + wd > lmx) lmx = x + wd;
+  }
+  return { lmn, lmx };
+}
 {
   const ctx = load();
   ctx.els.plane.clientWidth = 720; ctx.els.plane.clientHeight = 430;
   ctx.pub.render();
   const svg = ctx.els.plane.innerHTML;
   const { r, x } = tickNums(svg, 430);
-  check('label R mencapai −6 DAN +6 (window ±~6, bukan −4..4)', () => {
-    contains(r.map(String).join(','), '-6', 'ekor kiri sumbu R');
-    contains(r.map(String).join(','), '6', 'ekor kanan sumbu R');
+  check('label R −4..4 (window ±~4.2, BUKAN −6..6 dari versi lama)', () => {
+    contains(r.map(String).join(','), '-4', 'ekor kiri sumbu R');
+    contains(r.map(String).join(','), '4', 'ekor kanan sumbu R');
+    notContains(r.map(String).join(','), '-6', 'versi lama −6');
   });
-  check('label X mencapai −3 DAN +3 (window ±~3.7)', () => {
-    contains(x.map(String).join(','), '-3', 'ekor bawah sumbu X');
-    contains(x.map(String).join(','), '3', 'ekor atas sumbu X');
+  check('label X −2..2 (window ±~2.4, BUKAN −3..3)', () => {
+    contains(x.map(String).join(','), '-2', 'ekor bawah sumbu X');
+    contains(x.map(String).join(','), '2', 'ekor atas sumbu X');
+    notContains(x.map(String).join(','), '-3', 'versi lama −3');
   });
-  check('margin simetris thd origin: label nol ada di kedua sumbu', () => {
-    contains(r.map(String).join(','), '0', 'nol sumbu R');
-    contains(x.map(String).join(','), '0', 'nol sumbu X');
+  check('kurva mengisi lebar plot: gap kiri < 17% & gap kanan < 11%', () => {
+    const gm = svg.match(/clipPath id="clipZ\d+"><rect x="([\d.]+)" y="[\d.]+" width="([\d.]+)"/);
+    const padL = +gm[1], plotW = +gm[2];
+    const { lmn, lmx } = zoneExtremes(svg, padL, plotW);
+    const gl = (lmn - padL) / plotW, gr = (padL + plotW - lmx) / plotW;
+    if (!(gl < 0.17)) throw new Error(`gap kiri ${(gl * 100).toFixed(1)}% ≥ 17%`);
+    if (!(gr < 0.11)) throw new Error(`gap kanan ${(gr * 100).toFixed(1)}% ≥ 11%`);
   });
-  check('lingkaran tetap bulat: px/Ω sama utk R & X (skala isotropik)', () => {
-    // ukur jarak antar-label tick: R step 2 Ω & X step 1 Ω harus memakai px/Ω sama
+  check('lingkaran tetap bulat: step tick R & X memakai px/Ω sama', () => {
     const r2 = r.sort((a, b) => a - b), x2 = x.sort((a, b) => a - b);
     const rStep = (r2[r2.length - 1] - r2[0]) / (r2.length - 1);
     const xStep = (x2[x2.length - 1] - x2[0]) / (x2.length - 1);
-    if (Math.abs(rStep - 2) > 1e-6 || Math.abs(xStep - 1) > 1e-6) throw new Error(`step R=${rStep} X=${xStep}`);
+    if (Math.abs(rStep - 1) > 1e-6 || Math.abs(xStep - 1) > 1e-6) throw new Error(`step R=${rStep} X=${xStep}`);
+  });
+}
+{
+  /* kanvas lebih persegi: tanpa clamp jendela R akan memotong kurva kanan;
+     clamp no-cut harus melebarkan jendela sampai SEMUA zona masuk plot. */
+  const ctx = load();
+  ctx.els.plane.clientWidth = 700; ctx.els.plane.clientHeight = 560;
+  ctx.pub.render();
+  const svg = ctx.els.plane.innerHTML;
+  check('clamp no-cut: di kanvas persegi tak ada zona terpotong sisi (max cx+r ≤ tepi plot)', () => {
+    const gm = svg.match(/clipPath id="clipZ\d+"><rect x="([\d.]+)" y="[\d.]+" width="([\d.]+)"/);
+    const padL = +gm[1], plotW = +gm[2];
+    const { lmx } = zoneExtremes(svg, padL, plotW);
+    if (!(lmx <= padL + plotW + 0.01)) throw new Error(`zona kanan ${lmx.toFixed(0)}px > tepi plot ${(padL + plotW).toFixed(0)}px`);
+    // clamp aktif: gap kanan ≈ margin 0.25 Ω (≤ 5%) — tanpa clamp zona kanan akan terpotong
+    const gr = (padL + plotW - lmx) / plotW;
+    if (!(gr <= 0.05)) throw new Error(`gap kanan ${(gr * 100).toFixed(1)}% — clamp no-cut tidak melebar`);
+  });
+}
+
+/* ============ Seam E: label tick punya outline putih (terbaca di atas kurva) ============ */
+console.log('\nrenderPlane — label tick dgn halo putih (paint-order stroke)');
+{
+  const ctx = load();
+  ctx.els.plane.clientWidth = 720; ctx.els.plane.clientHeight = 430;
+  ctx.pub.render();
+  const svg = ctx.els.plane.innerHTML;
+  const halos = svg.match(/stroke="var\(--surface\)" stroke-width="3" paint-order="stroke"/g) || [];
+  check('setiap label tick angka (R & X) membawa halo putih', () => {
+    if (halos.length < 8) throw new Error(`hanya ${halos.length} label ber-halo — harap ≥ 8 (tick R 9 + X 5)`);
+  });
+  check('halo menempel pada teks tick (font-family JetBrains Mono, ukuran 9)', () => {
+    const sample = svg.match(/<text x="(-?[\d.]+)" y="([\d.]+)" font-family="JetBrains Mono" font-size="9" fill="var\(--ink-soft\)" stroke="var\(--surface\)" stroke-width="3" paint-order="stroke"/g) || [];
+    if (sample.length < 8) throw new Error(`teks tick ber-halo hanya ${sample.length}`);
   });
 }
 
