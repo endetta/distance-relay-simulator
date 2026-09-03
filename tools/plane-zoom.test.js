@@ -5,9 +5,10 @@
        di Chrome) = zoom IN, arah dibalik dari perilaku lama yg terbalik; kuat-menengah
        ≈ ×1.08 per 10 px; simetris f(−x)=1/f(x).
    (C) renderPlane adaptif — kanvas mengikuti ukuran elemen (#plane clientWidth/Height).
-   (D) Jendela R–X DIPEPETKAN ke kartu — k=1 merapat ke konten (×0.82, bulat tetap
-       bulat): di kanvas 720×430 label tick R −4..4 & X −2..2; plus clamp NO-CUT di
-       fit default supaya konten yg digambar tak pernah terpotong kiri/kanan.
+   (D) Jendela R–X DIPEPETKAN ke kartu — k=1 merapat ke konten (×0.75, bulat tetap
+       bulat) dan DIPUSATKAN pd pusat konten yg digambar (gap kiri ≈ gap kanan): di
+       kanvas 720×430 label tick R −3..4 & X −2..2; plus clamp NO-CUT di fit default
+       supaya konten yg digambar tak pernah terpotong kiri/kanan.
    (E) Label tick R & X membawa halo putih (paint-order stroke) agar terbaca di atas kurva.
    Stub harness tak punya CSS/layout → #plane.clientWidth di-set manual utk mensimulasikan
    kotak kanvas sebenarnya; tanpa nilai → fallback 640×470.
@@ -145,23 +146,26 @@ function zoneExtremes(svg, padL, plotW) {
   ctx.pub.render();
   const svg = ctx.els.plane.innerHTML;
   const { r, x } = tickNums(svg, 430);
-  check('label R −4..4 (window ±~4.2, BUKAN −6..6 dari versi lama)', () => {
-    contains(r.map(String).join(','), '-4', 'ekor kiri sumbu R');
+  check('label R −3..4 (window dipusatkan pd konten: kiri −3, kanan +4)', () => {
+    contains(r.map(String).join(','), '-3', 'ekor kiri sumbu R');
+    contains(r.map(String).join(','), '3', 'tengah sumbu R');
     contains(r.map(String).join(','), '4', 'ekor kanan sumbu R');
-    notContains(r.map(String).join(','), '-6', 'versi lama −6');
+    notContains(r.map(String).join(','), '-4', 'tidak boleh lebih kiri dari −3');
+    notContains(r.map(String).join(','), '5', 'tidak boleh lebih kanan dari +4');
   });
-  check('label X −2..2 (window ±~2.4, BUKAN −3..3)', () => {
+  check('label X −2..2 (window ±~2.2, BUKAN −3..3)', () => {
     contains(x.map(String).join(','), '-2', 'ekor bawah sumbu X');
     contains(x.map(String).join(','), '2', 'ekor atas sumbu X');
     notContains(x.map(String).join(','), '-3', 'versi lama −3');
   });
-  check('kurva mengisi lebar plot: gap kiri < 17% & gap kanan < 11%', () => {
+  check('kurva mengisi lebar plot: gap kiri < 10% & gap kanan < 10% & rata (|Δ| < 2%)', () => {
     const gm = svg.match(/clipPath id="clipZ\d+"><rect x="([\d.]+)" y="[\d.]+" width="([\d.]+)"/);
     const padL = +gm[1], plotW = +gm[2];
     const { lmn, lmx } = zoneExtremes(svg, padL, plotW);
     const gl = (lmn - padL) / plotW, gr = (padL + plotW - lmx) / plotW;
-    if (!(gl < 0.17)) throw new Error(`gap kiri ${(gl * 100).toFixed(1)}% ≥ 17%`);
-    if (!(gr < 0.11)) throw new Error(`gap kanan ${(gr * 100).toFixed(1)}% ≥ 11%`);
+    if (!(gl < 0.10)) throw new Error(`gap kiri ${(gl * 100).toFixed(1)}% ≥ 10%`);
+    if (!(gr < 0.10)) throw new Error(`gap kanan ${(gr * 100).toFixed(1)}% ≥ 10%`);
+    if (!(Math.abs(gl - gr) < 0.02)) throw new Error(`gap tak rata: kiri ${(gl * 100).toFixed(1)}% vs kanan ${(gr * 100).toFixed(1)}%`);
   });
   check('lingkaran tetap bulat: step tick R & X memakai px/Ω sama', () => {
     const r2 = r.sort((a, b) => a - b), x2 = x.sort((a, b) => a - b);
@@ -182,7 +186,7 @@ function zoneExtremes(svg, padL, plotW) {
     const padL = +gm[1], plotW = +gm[2];
     const { lmx } = zoneExtremes(svg, padL, plotW);
     if (!(lmx <= padL + plotW + 0.01)) throw new Error(`zona kanan ${lmx.toFixed(0)}px > tepi plot ${(padL + plotW).toFixed(0)}px`);
-    // clamp aktif: gap kanan ≈ margin 0.25 Ω (≤ 5%) — tanpa clamp zona kanan akan terpotong
+    // clamp aktif: gap kanan ≈ margin 0.15 Ω (≤ 5%) — tanpa clamp zona kanan akan terpotong
     const gr = (padL + plotW - lmx) / plotW;
     if (!(gr <= 0.05)) throw new Error(`gap kanan ${(gr * 100).toFixed(1)}% — clamp no-cut tidak melebar`);
   });

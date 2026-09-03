@@ -35,7 +35,7 @@ Buka file langsung di browser (`file:///`), atau `python -m http.server` / `npx 
 | `tools/sld-v-i.test.js` | Tes model V/I + chip SLD. Jalankan: `node tools/sld-v-i.test.js`. |
 | `tools/flow-anim.test.js` | Tes revisi animasi aliran SLD (`flowSegments` + geometri panah). Jalankan: `node tools/flow-anim.test.js`. |
 | `tools/side-mode.test.js` | Tes pemangkasan layout & mode dua-mode kartu kanan (`tripSequence` + `P.sideMode`). Jalankan: `node tools/side-mode.test.js`. |
-| `tools/plane-zoom.test.js` | Tes zoom roda ±15%/100px + pinch dua-jari (`wheelZoomFactor`/`pinchZoomFactor`), jendela R–X dipepetkan ke kartu (×0.82 + clamp no-cut) & kanvas adaptif + halo putih pd label tick. Jalankan: `node tools/plane-zoom.test.js`. |
+| `tools/plane-zoom.test.js` | Tes zoom roda ±15%/100px + pinch dua-jari (`wheelZoomFactor`/`pinchZoomFactor`), jendela R–X dipepetkan ke kartu (×0.75 + pusat konten + clamp no-cut) & kanvas adaptif + halo putih pd label tick. Jalankan: `node tools/plane-zoom.test.js`. |
 | `design-plans/` | Arsip design plan; yang ada berlabel **OBSOLETE** — jangan dieksekusi. |
 
 ## Arsitektur isi file HTML (urut dalam `<script>`)
@@ -85,15 +85,16 @@ Buka file langsung di browser (`file:///`), atau `python -m http.server` / `npx 
   tinta (sumber 75 → Bus A 145 … Bus C 905, gutter ≈53 px tiap sisi) & dirapatkan
   vertikal (viewBox 142 → 130, baris label atas/bawah dirapatkan).
 - **Kanvas R–X dipepetkan ke kartu & zoom roda/pinch (sesi ini)**: jendela default
-  ×0.82 (k=1 merapat ke kurva — diagram mengisi kartu, label R −4..4 / X −2..2 di
-  kanvas 720×430, lingkaran tetap bulat) + clamp NO-CUT di fit default: jendela R
-  melebar otomatis bila konten yg digambar bakal terpotong kiri/kanan. Label tick R & X
-  ber-halo putih (`paint-order:stroke`, `stroke:var(--surface)`). Toolbar zoom (−/+/Fit)
-  chip melayang DI DALAM plot (pojok kanan-atas, radius 12px, `padT` 26→10). `renderPlane`
-  adaptif thd ukuran kanvas (viewBox = ukuran elemen, 1:1 px); `fitPlane` mengisi kartu
-  s.d. legenda. Zoom roda `wheelZoomFactor` ±15% per 100 px gulir; pinch dua-jari (wheel
-  `ctrlKey`) pakai `pinchZoomFactor` — renggangan = zoom IN (tanda dibalik dari yg
-  terbalik), ≈×1.08/10 px.
+  ×0.75 (k=1 merapat ke kurva — diagram mengisi kartu, gap kiri ≈ gap kanan ≈3% di
+  desktop; label R −3..4 / X −2..2 di kanvas 720×430, lingkaran tetap bulat), jendela R
+  dipusatkan pd pusat konten yg digambar + clamp NO-CUT di fit default (dihitung ulang
+  tiap render): jendela R melebar otomatis bila konten yg digambar bakal terpotong
+  kiri/kanan. Label tick R & X ber-halo putih (`paint-order:stroke`, `stroke:var(--surface)`).
+  Toolbar zoom (−/+/Fit) chip melayang DI DALAM plot (pojok kanan-atas, radius 12px,
+  `padT` 26→10). `renderPlane` adaptif thd ukuran kanvas (viewBox = ukuran elemen, 1:1
+  px); `fitPlane` mengisi kartu s.d. legenda. Zoom roda `wheelZoomFactor` ±15% per 100 px
+  gulir; pinch dua-jari (wheel `ctrlKey`) pakai `pinchZoomFactor` — renggangan = zoom IN
+  (tanda dibalik dari yg terbalik), ≈×1.08/10 px.
 - **Scrollbar tipis**: `.params-panel` 6px, thumb pill rounded, track transparan
   (`scrollbar-width:thin` utk Firefox).
 - **Chip V & I di SLD (SELALU tampil)**: tombol `#viToggle`/`P.showVI` DIHAPUS (dulu
@@ -134,9 +135,10 @@ dan arus loop gangguan per sumber + total dalam kA primer. Uji literalnya ada di
   (`clientWidth/Height`, fallback 640×470 utk tes) dan menyetel `viewBox` = ukuran itu,
   jadi koordinat internal 1:1 dgn px CSS — handler wheel/pan memakai offset kursor mentah
   (tidak ada pasangan konstanta VBG/VBH2 lagi). Toolbar zoom = chip melayang DI DALAM
-  plot pojok kanan-atas (`padT=10`); jendela default dipepetkan ×0.82 + clamp no-cut
-  (bulat tetap bulat); label tick ber-halo putih; zoom roda = `wheelZoomFactor` ±15% per
-  100 px gulir, pinch dua-jari = `pinchZoomFactor` (renggangan = zoom IN). `viewBox` SLD harus
+  plot pojok kanan-atas (`padT=10`); jendela default dipepetkan ×0.75 + pusat konten +
+  clamp no-cut (bulat tetap bulat); label tick ber-halo putih; zoom roda =
+  `wheelZoomFactor` ±15% per 100 px gulir, pinch dua-jari = `pinchZoomFactor` (renggangan
+  = zoom IN). `viewBox` SLD harus
   sinkron dgn `VBH` di `renderSLD`.
 - **Skala bidang R–X** dari bounding box zona + titik fault relay aktif, **bukan** dari
   lensa beban (lensa overlay full-canvas; memakainya utk skala merusak grid).

@@ -931,22 +931,27 @@ function renderPlane(m,decisions){
   else{const extra=spanR/targetRatio-spanX; maxX+=extra;}
   spanR=maxR-minR; spanX=maxX-minX;
   const cx0=(minR+maxR)/2, cy0=(minX+maxX)/2;   // pusat data (frame)
-  /* Jendela default DIPEPETKAN ke konten: ×0.82 (k=1 merapat — RX diagram mengisi
-     kartu, zone-1 masih penuh vertikal). Kedua span dikalikan bersama → rasio dijaga,
-     lingkaran tetap bulat. */
-  const WIDE=0.82;
+  /* Jendela default DIPEPETKAN ke konten: ×0.75 (k=1 merapat — RX diagram mengisi
+     kartu; puncak zone-1 boleh sedikit terpotong, sudah disepakati user). Kedua span
+     dikalikan bersama → rasio dijaga, lingkaran tetap bulat. */
+  const WIDE=0.75;
   spanR*=WIDE; spanX*=WIDE;
-  /* Clamp NO-CUT (hanya di fit default dgn pusat origin): bila konten yg DIGAMBAR
-     (zona setelah gz, dgn margin 0.25 Ω) bakal terpotong di kiri/kanan — mis. kanvas
-     persegi — jendela R dilebarkan secukupnya agar kurva tak pernah terpotong sisi.
-     Nonaktif saat user sudah pan/zoom (k≠1 atau cx/cy bergeser) agar tak melawan
-     interaksi. */
+  /* Fit default (k=1, window masih di posisi fit): jendela R DIPUSATKAN pd pusat
+     konten yg DIGAMBAR (kiri–kanan rata), lalu clamp NO-CUT — bila konten (zona
+     setelah gz, dgn margin 0.15 Ω) bakal terpotong kiri/kanan — mis. kanvas persegi —
+     jendela R dilebarkan secukupnya agar kurva tak pernah terpotong sisi. Guard
+     dihitung ulang tiap render (cx ≈ pusat fit atau origin) supaya clamp tetap aktif
+     setelah inisialisasi & saat resize; pan/zoom (k≠1 atau cx/cy bergeser) mematikannya
+     agar tak melawan interaksi. */
   const dSpan=Math.max(dMaxR-dMinR,1e-9);
-  const atFit = view.k===1 && (view.cx===undefined||view.cx===null||view.cx===0) && (view.cy===undefined||view.cy===null||view.cy===0);
+  const fitCx0 = dSpan>0 ? (dMinR+dMaxR)/2 : null;
+  const atFit = view.k===1
+    && (view.cy===undefined||view.cy===null||view.cy===0)
+    && (view.cx===undefined||view.cx===null||view.cx===0 || (fitCx0!==null && Math.abs(view.cx-fitCx0)<1e-6));
+  let fitCx = atFit ? fitCx0 : null;
   if(atFit && dSpan>0){
-    const wc = (view.cx===undefined||view.cx===null) ? cx0 : view.cx;
-    const mR=0.25;
-    const need=Math.max(spanR, (wc-(dMinR-mR))*2, ((dMaxR+mR)-wc)*2);
+    const mR=0.15;
+    const need=Math.max(spanR, (fitCx-(dMinR-mR))*2, ((dMaxR+mR)-fitCx)*2);
     if(need>spanR){ spanR=need; spanX=spanR/targetRatio; }
   }
   /* ZOOM = jendela data. k: 1=jendela ~span data; <1=jendela LUAS (thumbnail, angka
@@ -954,7 +959,7 @@ function renderPlane(m,decisions){
      jendela (cx,cy) dalam koordinat DATA. toPx memetakan titik -> piksel plot TETAP. */
   const k=Math.min(Math.max(view.k||1,0.12),64);   // clamp defensif (UI juga membatasi)
   const spanRw=spanR/k, spanXw=spanX/k;
-  const wcx = view.cx!==undefined && view.cx!==null ? view.cx : cx0;
+  const wcx = fitCx!==null ? fitCx : (view.cx!==undefined && view.cx!==null ? view.cx : cx0);
   const wcy = view.cy!==undefined && view.cy!==null ? view.cy : cy0;
   view.cx=wcx; view.cy=wcy;   // materialize agar handler zoom/pan selalu punya pusat valid
   const scale=plotH/spanXw;
