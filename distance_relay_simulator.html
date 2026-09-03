@@ -100,6 +100,14 @@
 
   .plane-card,.side-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
   .side-card{display:flex;flex-direction:column;}
+  /* Kanvas diagram (SLD, R–X, tangga waktu) + semua teks di dalamnya: non-selectable.
+     Tanpa ini klik-ganda / drag-pan / seret-handle-gangguan ikut menyeleksi teks label
+     (highlight biru) — mengganggu baca diagram. */
+  #sld,#plane,#staircase, #sld *,#plane *,#staircase *{
+    -webkit-user-select:none;
+    -moz-user-select:none;
+    user-select:none;
+  }
   .toolbar{display:flex;gap:6px;align-items:center;margin-bottom:8px;}
   .toolbar .sp{flex:1;}
   .legend{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:var(--ink-soft);margin-top:8px;font-family:'JetBrains Mono',monospace;}
@@ -156,6 +164,10 @@
       linear-gradient(135deg,#FDFAF3 0%,#F8EFE1 100%);
     transform:translateX(-101%);   /* tersembunyi di luar kiri */
     transition:transform .4s cubic-bezier(.25,.6,.25,1);
+    /* tepi kiri-kanan lembut: solid di tengah, semi-transparan/fade ke tepi —
+       panel tidak tampak seperti kotak keras saat menyapu */
+    -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 9%,#000 91%,transparent 100%);
+    mask-image:linear-gradient(90deg,transparent 0,#000 9%,#000 91%,transparent 100%);
     cursor:pointer;
   }
   #splash.go{transform:none;}
@@ -319,7 +331,7 @@
 
       <div class="sld-card">
         <button class="mini-btn on" id="viToggle" title="Tampilkan/sembunyikan tegangan bus & arus">V &amp; I: nyala</button>
-        <svg id="sld" viewBox="0 0 980 124" width="100%" style="display:block;cursor:pointer;"></svg>
+        <svg id="sld" viewBox="0 0 980 142" width="100%" style="display:block;cursor:pointer;"></svg>
       </div>
 
       <div class="plane-row">
@@ -809,6 +821,31 @@ function computeFaultCircuit(m){
   };
 }
 
+/* ---------- segmen aliran daya SLD (sumber panah animasi; murni & diuji) ----------
+   Satu sumber kebenaran utk JALUR & ARUS tiap panah aliran di SLD. Fisika radial:
+     - fault di L1: Sumber→fault = ia (arus sumber A); B→fault = ib (infeed, copper)
+       hanya saat infeed nyala. Segmen SETELAH titik gangguan tak dialiri apa pun.
+     - fault di L2: Sumber→B = ia SAJA (infeed masuk di Bus B, bukan di A — dulu
+       segmen A–B ikut digambar BESAR, artefak); B→fault = gabungan ifK (ia+ib).
+   Ukuran panah kontinu ∝ kA: w = kA/Iref, Iref = arus hubung-singkat di Bus A
+   (E/|ZsA|). Karena ia TIDAK tergantung infeed, panah Sumber→B tak pernah
+   melonjak saat fault menyeberang B, dan mengecil makin jauh fault. Renderer SLD
+   memakai output ini; tools/flow-anim.test.js memeriksa segmen/warna/kA literal. */
+function flowSegments(m, vi){
+  const refK=(P.vLL_kV/Math.sqrt(3))/Math.max(P.zsmag,0.001); // kA referensi: bolted di Bus A
+  const w=kA=>Math.max(0,Math.min(1,kA/refK));
+  const {ia,ib,ifK}=vi.currents;
+  const segs=[];
+  if(P.pos<=P.l1){
+    segs.push({from:'src',to:'fault',kA:ia,color:'source'});
+    if(P.infeedOn) segs.push({from:'B',to:'fault',kA:ib,color:'infeed'});
+  }else{
+    segs.push({from:'src',to:'B',kA:ia,color:'source'});
+    segs.push({from:'B',to:'fault',kA:ifK,color:'source'}); // gabungan ia+ib = If
+  }
+  return segs.map(s=>Object.assign({w:w(s.kA)},s));
+}
+
 /* ---------- R-X plane (fit + zoom/pan + semua relay, koordinat global) ---------- */
 function renderPlane(m,decisions){
   const svg=$('plane');
@@ -1034,7 +1071,8 @@ function sldDragOK(px,py,faultX,y){
 }
 function renderSLD(m){
   const svg=$('sld');
-  const VBW=980,VBH=124, y=58, half=24;
+  /* VBH=142: ruang bawah utk label If (baris sendiri) & penanda "terlihat" relay */
+  const VBW=980,VBH=142, y=58, half=24;
   const totalKm=P.l1+P.l2;
   /* Simetri kiri–kanan: margin kiri = margin kanan (xA = VBW − xC). Saluran A–B–C
      digambar PROPORSIONAL km (l1 : l2), jadi panjang garis = panjang saluran sebenarnya. */
@@ -1042,8 +1080,9 @@ function renderSLD(m){
   const xA=110, xC=980-110, span=xC-xA;
   const xB=xA+span*(P.l1/Math.max(totalKm,0.001));
   const faultX=xA+span*(P.pos/Math.max(totalKm,0.001));
-  /* nilai V bus & arus gangguan — dipakai chip label kecil di bawah/atas bus & segmen */
-  const vi=P.showVI?computeFaultCircuit(m):null;
+  /* nilai V bus & arus gangguan — dihitung SELALU (dipakai panah aliran & chip V/I).
+     Chip V/I digambar hanya saat P.showVI; panah aliran selalu ∝ kA dari sini. */
+  const vi=computeFaultCircuit(m);
   let s='';
   /* semua LABEL teks dikumpulkan di `lbl` dan dirender PALING AKHIR — teks tidak
      pernah tertimpa garis saluran, panah gangguan, maupun dash aliran (bug lama:
@@ -1058,7 +1097,7 @@ function renderSLD(m){
   s+=`<line x1="${srcX}" y1="${y-13}" x2="${srcX}" y2="${y+13}" stroke="var(--blue)" stroke-width="3"/>`;
   s+=`<circle cx="${srcX}" cy="${y}" r="3.5" fill="var(--blue)"/>`;
   lbl+=`<text x="${srcX}" y="${y+22}" font-family="JetBrains Mono" font-size="10" fill="var(--ink-soft)" text-anchor="middle" style="${halo}">Sumber</text>`;
-  if(vi) lbl+=`<text x="${srcX}" y="${y+35}" font-family="JetBrains Mono" font-size="9.5" fill="var(--red)" text-anchor="middle" font-weight="600" style="${halo}">I ${fmt(vi.currents.ia,1)} kA</text>`;
+  if(P.showVI) lbl+=`<text x="${srcX}" y="${y+35}" font-family="JetBrains Mono" font-size="9.5" fill="var(--red)" text-anchor="middle" font-weight="600" style="${halo}">I ${fmt(vi.currents.ia,1)} kA</text>`;
 
   /* bus = garis vertikal tebal (terhubung penuh, tanpa celah) */
   const bus=(x,label)=>`
@@ -1068,19 +1107,22 @@ function renderSLD(m){
   /* panah aliran: polygon berjalan sepanjang lintasan (a→b) via animateMotion.
      Bentuk = mata panah runcing sederhana 4 titik (ekor cekung, tak berpotongan diri)
      sehingga arah terbaca jelas. rotate:auto membalik panah utk lintasan ke kiri.
-     Jarak antar-panah lega (spacing); kecepatan seragam 125 px/s; begin negatif
+     UKURAN panah kontinu ∝ arus segmen: w = kA/Iref dari flowSegments() (dulu cuma
+     2 level diskret — membuat panah A–B "membesar" mendadak saat fault lintas B).
+     KECEPATAN tetap FLOW_SPEED px/s (arus ≠ kecepatan aliran muatan); begin negatif
      menyebarkan panah di sepanjang lintasan sejak frame pertama. */
-  const ARROW_N=`14,0 0,-5 4,0 0,5`;         // panah normal (panjang 14, lebar 10)
-  const ARROW_BIG=`19,0 0,-6.5 5.5,0 0,6.5`; // panah arus gabungan sumber+infeed (besar)
-  const flowArrow=(a,b,color,big)=>{
+  const GLYPH_MIN=10,GLYPH_MAX=26,FLOW_SPEED=125;
+  const drawFlowLane=(a,b,color,w)=>{
     const len=Math.abs(b-a); if(len<8) return;
-    const spacing=big?76:64;
+    const g=GLYPH_MIN+(GLYPH_MAX-GLYPH_MIN)*w;         // panjang panah (px) ∝ kA
+    const pts=`${fmt(g,1)},0 0,${fmt(-g*0.34,1)} ${fmt(g*0.30,1)},0 0,${fmt(g*0.34,1)}`;
+    const spacing=Math.max(46,g*3.4);
     const n=Math.max(1,Math.round(len/spacing));
-    const durN=len/125, dur=durN.toFixed(2);
+    const durN=len/FLOW_SPEED, dur=durN.toFixed(2);
     const path=`M ${a} ${y} L ${b} ${y}`;
     for(let i=0;i<n;i++){
       const begin=(-(i*durN/n)).toFixed(2);
-      s+=`<polygon points="${big?ARROW_BIG:ARROW_N}" fill="${color}" opacity="0.88"><animateMotion dur="${dur}s" begin="${begin}s" repeatCount="indefinite" rotate="auto" path="${path}"/></polygon>`;
+      s+=`<polygon points="${pts}" fill="${color}" opacity="0.88"><animateMotion dur="${dur}s" begin="${begin}s" repeatCount="indefinite" rotate="auto" path="${path}"/></polygon>`;
     }
   };
   /* saluran 1 & 2 — penghantar statis saja. ARUS digambar terpisah sesuai fisika
@@ -1098,7 +1140,7 @@ function renderSLD(m){
   lbl+=`<text x="${xB}" y="${y-half-9}" font-family="JetBrains Mono" font-size="10.5" fill="var(--ink)" text-anchor="middle" font-weight="700" style="${halo}">Bus B</text>`;
   lbl+=`<text x="${xC}" y="${y-half-9}" font-family="JetBrains Mono" font-size="10.5" fill="var(--ink)" text-anchor="middle" font-weight="700" style="${halo}">Bus C</text>`;
   /* chip tegangan loop tiap bus (di atas garis, di bawah nama bus) */
-  if(vi) [xA,xB,xC].forEach((bx,i)=>{
+  if(P.showVI) [xA,xB,xC].forEach((bx,i)=>{
     const b=vi.buses[['A','B','C'][i]];
     lbl+=`<text x="${bx}" y="${y-half-19}" font-family="JetBrains Mono" font-size="9.5" fill="var(--blue)" text-anchor="middle" font-weight="600" style="${halo}">${b.tag} ${Math.round(b.loopKv)} kV</text>`;
   });
@@ -1127,14 +1169,14 @@ function renderSLD(m){
     <line x1="${xB-10}" y1="${y+26.5}" x2="${xB+10}" y2="${y+26.5}" stroke="${gc1}" stroke-width="1.2"/>
     <line x1="${xB-10}" y1="${y+30}" x2="${xB+10}" y2="${y+30}" stroke="${gc1}" stroke-width="1.2"/>
   </g>`;
-  const infeedLbl=`Infeed ${gi?'on':'off'}`+(vi&&gi?` · ${fmt(vi.currents.ib,1)} kA`:'');
+  const infeedLbl=`Infeed ${gi?'on':'off'}`+(P.showVI&&gi?` · ${fmt(vi.currents.ib,1)} kA`:'');
   lbl+=`<text x="${xB+20}" y="${y+29}" font-family="JetBrains Mono" font-size="8.5" fill="${gi?'var(--blue)':'var(--line)'}" text-anchor="start" style="${halo}">${infeedLbl}</text>`;
 
   const ftLabel=P.faultType==='3ph'?'3φ':P.faultType==='phph'?'φ-φ':'φ-G';
   /* label mengikuti mode gangguan: R → "Rf=..Ω", Z → "Zf=R+jX Ω" */
-  const zfLabel = (P.rfMode==='Z'
+  const zfLabel = P.rfMode==='Z'
     ? `${ftLabel} · Zf=${fmt(P.rf,0)}+j${fmt(P.xf,0)}Ω`
-    : `${ftLabel} · Rf=${fmt(P.rf,0)}Ω`)+(vi?` · If ${fmt(vi.currents.ifK,1)} kA`:'');
+    : `${ftLabel} · Rf=${fmt(P.rf,0)}Ω`;
   const flx=Math.max(70,Math.min(VBW-70,faultX));
   s+=`<g id="faultHandle" style="cursor:ew-resize;">
       <line x1="${faultX}" y1="${y-30}" x2="${faultX}" y2="${y+30}" stroke="var(--red)" stroke-width="2"/>
@@ -1142,27 +1184,18 @@ function renderSLD(m){
       <circle cx="${faultX}" cy="${y}" r="9" fill="var(--red)" opacity="0.15"/>
     </g>`;
   lbl+=`<text x="${flx}" y="${y+46}" font-family="JetBrains Mono" font-size="10" fill="var(--red)" text-anchor="middle" font-weight="600" style="${halo}">${zfLabel}</text>`;
+  /* arus gangguan total — baris sendiri DI BAWAH label jenis gangguan */
+  if(P.showVI) lbl+=`<text x="${flx}" y="${y+58}" font-family="JetBrains Mono" font-size="10" fill="var(--red)" text-anchor="middle" font-weight="600" style="${halo}">If ${fmt(vi.currents.ifK,1)} kA</text>`;
 
-  /* ===== animasi aliran daya (SELALU tampil, sesuai fisika radial) =====
-     Jaringan radial: arus gangguan hanya mengalir dari sumber-sumber AKTIF menuju
-     titik gangguan; segmen SETELAH gangguan tidak dialiri apa pun.
-     - Sumber→gangguan : merah (selalu).
-     - Infeed (Bus B)→gangguan : copper, hanya saat infeed nyala.
-     - Gangguan di L2 & infeed nyala : arus L2 = gabungan sumber+infeed →
-       panah Sumber→B→gangguan pakai ukuran BESAR.
-     - Tidak pernah ada dua arus menumpuk di satu segmen (warna langsung digabung). */
-  const faultOnL2=P.pos>P.l1;
-  if(!faultOnL2){
-    /* SC di saluran 1 */
-    flowArrow(srcX,faultX,'var(--red)',false);
-    if(P.infeedOn && Math.abs(faultX-xB)>2) flowArrow(xB,faultX,'var(--copper)',false);
-  }else{
-    /* SC di saluran 2: sumber utama melewati A dan B menuju gangguan */
-    const big=P.infeedOn;
-    flowArrow(srcX,xB,'var(--red)',big);
-    flowArrow(xB,faultX,'var(--red)',big);
-    /* setelah gangguan (menuju C): tanpa arus — tidak digambar apa pun */
-  }
+  /* ===== animasi aliran daya — per segmen dari flowSegments() (fisika radial) =====
+     Setiap jalur memakai kA kontribusinya (ia / ib / ifK) → ukuran panah ∝ arus,
+     kecepatan tetap (arus ≠ kecepatan). Segmen SETELAH titik gangguan tak digambar
+     apa pun; infeed hanya muncul sbg jalur copper B→fault (L1) atau menyatu di
+     B→fault (L2) — segmen Sumber→B membawa ia saja, tidak pernah melonjak. */
+  const pxAt={src:srcX,B:xB,fault:faultX};
+  flowSegments(m,vi).forEach(seg=>{
+    drawFlowLane(pxAt[seg.from],pxAt[seg.to], seg.color==='infeed'?'var(--copper)':'var(--red)', seg.w);
+  });
   s+=`<circle class="sc-pulse" cx="${faultX}" cy="${y}" r="14" fill="none" stroke="var(--red)" stroke-width="2"/>`;
   lbl+=`<text x="${flx}" y="${y+16}" font-family="JetBrains Mono" font-size="8.5" fill="var(--red)" text-anchor="middle" style="${halo}">SC</text>`;
 
@@ -1186,7 +1219,7 @@ function renderSLD(m){
           <line x1="${percX}" y1="${y-24}" x2="${percX}" y2="${y+24}" stroke="var(--copper)" stroke-width="1.5" stroke-dasharray="3 2"/>
           <polygon points="${percX},${y-9} ${percX+6},${y} ${percX},${y+9} ${percX-6},${y}" fill="var(--surface)" stroke="var(--copper)" stroke-width="1.8"/>
         </g>`;
-        lbl+=`<text x="${lpx}" y="${y+58}" font-family="JetBrains Mono" font-size="9" fill="var(--copper)" text-anchor="middle" style="${halo}">terlihat ${selR.id}</text>`;
+        lbl+=`<text x="${lpx}" y="${y+70}" font-family="JetBrains Mono" font-size="9" fill="var(--copper)" text-anchor="middle" style="${halo}">terlihat ${selR.id}</text>`;
       }
     }
   }

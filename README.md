@@ -6,7 +6,7 @@ Simulator memetakan bagaimana karakteristik relay yang berbeda (**Impedance, Rea
 
 ## Menjalankan
 
-Buka langsung `distance_relay_simulator.html` di browser (double-click, atau `file:///...`). Static server juga bisa:
+Buka langsung `distance_relay_simulator.html` di browser (double-click, atau `file:///...`). Untuk orientasi cepat (peta fitur & cara kerja) baca [docs/overview.md](docs/overview.md). Static server juga bisa:
 
 ```bash
 python -m http.server      # lalu buka http://localhost:8000
@@ -38,3 +38,4 @@ Tidak ada test suite formal; dua jalur validasi:
 - **Pixel-level bidang R–X** — harness Node kecil (stub DOM → jalankan isi `<script>` → ukur SVG `#plane` yang dihasilkan). Polanya didokumentasikan di CLAUDE.md.
 - **Kartu readout/status** — `node tools/readout.test.js`: menjalankan simulator lewat `tools/lens-harness.js` dan menegaskan kalimat ringkasan, struktur tabel 3 grup, serta teks status untuk berbagai skenario gangguan (zona 1/2/3, di belakang relay, tidak trip, error CT/PT).
 - **Tegangan & arus di SLD** — `node tools/sld-v-i.test.js`: `computeFaultCircuit` (nilai literal hasil hitung tangan pada jaringan sintetis murni-reaktif, untuk 3φ/φ-φ/φ-G × infeed off/×1/×4) + kehadiran chip `kV`/`kA` di `#sld` dan tombol toggle `P.showVI`.
+- **Animasi aliran daya di SLD** — `node tools/flow-anim.test.js`: `flowSegments` (jalur/`kA`/warna per segmen; segmen Sumber→B hanya membawa arus sumber `ia`, tak membesar saat fault lintas Bus B) + geometri panah di `#sld` (glyph ∝ kA, kecepatan konstan 125 px/s).

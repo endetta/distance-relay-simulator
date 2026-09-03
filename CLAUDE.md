@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-This folder contains a single self-contained file: **`distance_relay_simulator.html`** — an educational, browser-only simulator for **distance relay protection** (sistem proteksi tenaga listrik). It plots how different relay characteristics (Impedance, Reactance, Mho, Quadrilateral) decide whether to trip, on an R–X plane.
+This folder contains a single self-contained file: **`distance_relay_simulator.html`** — an educational, browser-only simulator for **distance relay protection** (sistem proteksi tenaga listrik). It plots how different relay characteristics (Impedance, Reactance, Mho, Quadrilateral) decide whether to trip, on an R–X plane. For a quick orientation (TL;DR, file map, feature summary, gotchas) read `docs/overview.md` first.
 
 There is **no build system, no package manager, no test suite, no framework and no external tooling**. Everything runs in the browser, and the only external dependencies are loaded from CDNs (KaTeX for formula rendering, Google Fonts).
 
 ## Running it
 
-Just open the `.html` file directly in a browser (double-click, or `file:///...`). A static server also works:
+Just open the `.html` file directly in a browser (double-click, or `file:///...`). For a quick orientation (TL;DR, file map, feature summary, gotchas) read `docs/overview.md` first. A static server also works:
 
 ```bash
 python -m http.server      # then browse to http://localhost:8000
@@ -20,7 +20,7 @@ npx serve
 
 There is no lint/build/test command. The JS **can** run outside the browser via a small Node mock-DOM harness (see `/tmp/diag3.js`, `/tmp/measure.js` for the pattern): stub `document`/`window` with elements that capture `innerHTML`, then run the `<script>` body with `new Function(code + ';global.__pub={render,S,P,computeModel};')()`, and regex-measure the generated `#plane` SVG. This is the pixel-level validation loop for the R–X plane (label placement, zoom anchor invariance, extreme pan, no-NaN). The seam under test is the generated SVG string — what the browser actually draws.
 
-In-repo harness & tests: `tools/lens-harness.js` stubs the DOM and exports `{render,S,P,computeModel,computeFaultCircuit,…}` plus captured elements (`els.<id>.innerHTML`/`textContent`); `tools/readout.test.js` verifies the readout/status card (`.side-card`) — summary sentence `.r-sum`, 3 group titles & row labels of `#readout`, and `#zoneLabel`/`#timeLabel` texts across trip/behind/no-trip/CT-PT-error scenarios. `tools/sld-v-i.test.js` verifies the SLD V/I feature: `computeFaultCircuit` literals (hand-derived) for a pure-X synthetic network across 3φ/φ-φ/φ-G × infeed off/×1/×4, loop tags, and the SVG chips / `P.showVI` toggle. Run with `node tools/readout.test.js` / `node tools/sld-v-i.test.js`. All hard-code the HTML filename in their `fs.readFileSync`/`HTML` path — update if the file is ever renamed.
+In-repo harness & tests: `tools/lens-harness.js` stubs the DOM and exports `{render,S,P,computeModel,computeFaultCircuit,flowSegments,…}` plus captured elements (`els.<id>.innerHTML`/`textContent`); `tools/readout.test.js` verifies the readout/status card (`.side-card`) — summary sentence `.r-sum`, 3 group titles & row labels of `#readout`, and `#zoneLabel`/`#timeLabel` texts across trip/behind/no-trip/CT-PT-error scenarios. `tools/sld-v-i.test.js` verifies the SLD V/I feature: `computeFaultCircuit` literals (hand-derived) for a pure-X synthetic network across 3φ/φ-φ/φ-G × infeed off/×1/×4, loop tags, and the SVG chips / `P.showVI` toggle. `tools/flow-anim.test.js` verifies the SLD flow-arrow physics: `flowSegments` segment/colour/`kA` literals plus `#sld` arrow glyphs ∝ `kA` per lane (never copper on L2, nothing past the fault, constant 125 px/s speed). Run with `node tools/readout.test.js` / `node tools/sld-v-i.test.js` / `node tools/flow-anim.test.js`. All hard-code the HTML filename in their `fs.readFileSync`/`HTML` path — update if the file is ever renamed.
 
 ## Git & GitHub
 
@@ -47,7 +47,7 @@ The whole program is one `<script>` block, organized into these logical sections
    - **Apparent Z** at the fault = Z-to-fault plus `Rf × infeed` (and, in `rfMode 'Z'`, `Xf × infeed`); `infeed` applies only when `P.infeedOn`. Fwd/rev directions are placed on the R–X plane by `relayOrigin(relay,m)` (R1 at Bus A=0, R2/R3 at `m.Z1`, R4 at `m.Z1+m.Z2`) and `gz(relay,z,m)`.
    - **Measured Z** (`relayFaultZ` → `fz.zm`) carries the CT/PT error: `fz.zm = Z · (1−ptErr/100)/(1−ctErr/100)` — slider convention: positive error = transformer **under-delivers** the secondary signal (CT saturation ⇒ underreach, CVT transient ⇒ overreach). Tripping is decided on `fz.zm`, **not** `ZapparentS`. `fz.zl` is the pure line impedance to the fault (the point's true position on the ray).
    - **SIR** (source impedance ratio) = `|Zs| / |Z1p|`; drives the sensitivity note.
-   - **Bus V & fault I for the SLD chips** (`computeFaultCircuit(m)`, also exported for tests): a deliberately simple equivalent, *not* part of the relay decision. E = VLL/√3 kV behind `Zs` at Bus A (source angle = L1 line angle); when `P.infeedOn`, an equal-EMF source at Bus B behind `Zs / P.infeed`. Fault is solved per fault type with classical symmetrical components under `Z1=Z2=Z0` (line and grounded sources), load ignored; fault current splits between the A and B paths by impedance divider, and passive stubs beyond the fault carry no current (voltage there = fault node). It returns, per bus, the relay-loop voltage (`|Vb−Vc|` for 3φ/φ-φ, `|Va|` for φ-G, kV primary) and loop fault currents per source + total (kA primary). Only `renderSLD` (and tests) consume it.
+   - **Bus V & fault I for the SLD chips** (`computeFaultCircuit(m)`, also exported for tests): a deliberately simple equivalent, *not* part of the relay decision. E = VLL/√3 kV behind `Zs` at Bus A (source angle = L1 line angle); when `P.infeedOn`, an equal-EMF source at Bus B behind `Zs / P.infeed`. Fault is solved per fault type with classical symmetrical components under `Z1=Z2=Z0` (line and grounded sources), load ignored; fault current splits between the A and B paths by impedance divider, and passive stubs beyond the fault carry no current (voltage there = fault node). It returns, per bus, the relay-loop voltage (`|Vb−Vc|` for 3φ/φ-φ, `|Va|` for φ-G, kV primary) and loop fault currents per source + total (kA primary). `flowSegments` and `renderSLD` (and tests) consume it.
    - `tau = lineAngle + rcaOffset` orients the Mho circle.
 
 5. **Trip decision** — `tripTest(relay, z, zn, zones, m)` returns true if **measured** Z falls inside a zone's characteristic shape; `relayFaultZ` computes the measured fault Z relative to the relay's bus and returns `{behind, z, zm, zl, ...}` (`behind` → no trip); `decideRelay(relay, m)` checks zones in order 1→2→3 and returns `{zone, time}` (`zone: 0` means no trip). Characteristic shapes:
@@ -57,8 +57,7 @@ The whole program is one `<script>` block, organized into these logical sections
    - **quadrilateral**: rectangle `R ∈ [0, zn.X×qrm]`, `X ∈ [0, zn.X]`.
    - **Characteristic module — the single source of zone geometry**: `charShape(relay, zn, zones, m)` → `{kind:'circle', c, r, dir?}` | `{kind:'rect', c1, c2}`; `pointIn(shape, z)` tests points; `shapeBounds(shape)` gives the plot bounding box. All shape constants (impedance non-directional `dir` check, reactance blinder `1.3×zone3`, mho center = reach/2 along `tau`, quad R-reach = `zn.X×qrm`) are written ONCE here. `tripTest`, the `grow()` bounding pass in `renderPlane`, and `shapeSVG` all consume these — never duplicate zone geometry elsewhere. The mho/impedance angle follows the relay's `lineRef` (L1 → `m.lineAngle`, L2 → `ang(m.Z2)`) plus `rcaOffset`.
 
-6. **Rendering** — four independent pure functions that each build an SVG string from `m` (model) and `dec` (decision) and set `innerHTML`:
-   - `renderPlane(m, dec)` — the R–X diagram (see *Rx diagram notes* below).    - `renderSLD(m)` — buses are thick vertical lines with relay boxes floating beside them (no arrows, no drop lines); a grid/infeed symbol below Bus B toggles `P.infeedOn` and stays in sync with its checkbox. The fault handle drags along the line (updates `S.pos`). All text is collected into the `lbl` string and appended LAST, each label carrying a paint-order halo — labels must never be buried under channel lines, fault arrows, or flow dashes (a past bug). The flow animation (red source→fault arrows, copper infeed→fault, nothing past the fault, bigger arrows for combined source+infeed current on L2 faults) is ALWAYS drawn — there is no toggle button; it re-renders with the fault position on every render.
+6. **Rendering** — four independent pure functions that each build an SVG string from `m` (model) and `dec` (decision) and set `innerHTML`:    - `renderPlane(m, dec)` — the R–X diagram (see *Rx diagram notes* below).    - `renderSLD(m)` — buses are thick vertical lines with relay boxes floating beside them (no arrows, no drop lines); a grid/infeed symbol below Bus B toggles `P.infeedOn` and stays in sync with its checkbox. The fault handle drags along the line (updates `S.pos`). All text is collected into the `lbl` string and appended LAST, each label carrying a paint-order halo — labels must never be buried under channel lines, fault arrows, or flow dashes (a past bug). The flow animation is ALWAYS drawn (no toggle) and re-renders with the fault position: lanes come from the pure `flowSegments(m, vi)` — L1 faults: red Sumber→fault (`ia`), copper B→fault (infeed `ib`, only when infeed on); L2 faults: red Sumber→B carries `ia` ONLY (never the infeed — a past artifact made it balloon at Bus B), B→fault is the combined red lane (`ifK`). Arrow glyph size is continuous ∝ `kA` (reference = bolted-at-A current `E/|ZsA|`), speed constant 125 px/s, nothing flows past the fault.
     - V/I chips (toggle `P.showVI` via `#viToggle`, default on): `computeFaultCircuit(m)` feeds a per-bus loop-voltage chip (`V/Vbc/Va … kV`, blue, above each bus) plus current chips — `I … kA` under the Sumber label, `· … kA` appended to the Infeed caption (only when infeed on), `· If … kA` appended to the fault label. All still go through `lbl`, so they get the halo and never bury channel lines.
    - `renderStaircase(m, dec)` — time–impedance (time–distance) steps for the selected relay.
    - `updateReadout(m, dec)` — status box, readout table, KaTeX formula, SIR note, and the per-characteristic explanatory note (`typeNotes`).
@@ -76,6 +75,42 @@ The plot bounds are computed from the **bounding box of the zone shapes + fault 
 **Gotcha**: the zoom/pan handlers read pads from `svg._map` (so they follow renderPlane automatically), but the `const VBG=640,VBH2=470` in the handlers and the svg's `viewBox="0 0 640 470"` attribute **must match** the `VBW/VBH` in renderPlane, or zoom/pan coordinates diverge.
 
 **Layout**: the parameter cards live in a single scroll container `.params-panel`, height-locked to the main column (SLD → R–X) by a `ResizeObserver`; on screens ≤920px the lock is released via CSS `height:auto!important`.
+
+## Fitur & perubahan sesi 2026-09-03 (konteks tambahan)
+
+Baca `docs/overview.md` utk ringkasan orientasi cepat (TL;DR, peta file, gotcha).
+Perubahan yang sudah masuk & wajib dijaga agar tidak rusak oleh edit berikutnya:
+
+- **Splash pembuka** (`#splash`, IIFE sebelum init): tirai kiri→kanan, palet **ivory/krem**
+  hangat (BUKAN navy — user menolak navy), teks = judul gradien `--ink→--copper-deep` +
+  `S H E V A` (by-Sheva kecil sudah dihapus, jangan kembalikan). Timeline: `.go` masuk
+  (~20ms) → `.out` + `#root.ready` (~1350ms) → hapus splash (~1860ms). Klik = skip;
+  `prefers-reduced-motion` langsung skip; `<noscript>` fallback. **`.wrap` punya
+  `opacity:0` bawaan dan hanya tampil via `#root.ready .wrap`** — jangan hapus, itu
+  keputusan desain (halaman utama tak boleh terlihat sebelum animasi selesai). Tepi
+  kiri–kanan panel memakai CSS `mask-image` gradien agar tidak tampak kotak keras.
+- **Header halaman**: `.topbar .tt` 17px gradien `--blue→--teal` + dot copper; `.wrap`
+  padding 14px/40px (compact). Var baru di `:root`: `--teal:#13697A`, `--copper-deep:#8C4E16`.
+- **Kartu readout** (`updateReadout`): ringkasan `.r-sum` (1 kalimat + angka kunci) di atas
+  tabel 3 grup (`Relay & karakteristik` / `Impedansi gangguan` / `Lokasi gangguan &
+  jangkauan`). Struktur ini diuji `tools/readout.test.js` — label lama (`Zone 1 reach`,
+  `Z asli (saluran, primer)`, dst.) sudah dihapus dari DOM.
+- **Scrollbar tipis**: `.params-panel` 6px thumb pill `var(--line)` + track transparan +
+  `scrollbar-width:thin` (Firefox).
+- **Chip V/I di SLD**: `computeFaultCircuit(m)` (lihat bullet model di atas) + `#viToggle`
+  (`P.showVI`). `viewBox` SLD = `980×142`; label `If … kA` adalah baris TERPISAH di bawah
+  label jenis gangguan, dan penanda copper "terlihat R1" berada di `y+70`.
+- **Animasi aliran SLD (revisi sesi ini)**: jalur & arus panah bersumber dari fungsi murni
+  `flowSegments(m, vi)` (`ia`/`ib`/`ifK` dari `computeFaultCircuit`). Aturan segmen: fault
+  L1 → merah Sumber→fault = `ia`, copper B→fault = `ib` (infeed); fault L2 → merah
+  Sumber→B = `ia` SAJA (artefak lama: segmen A–B ikut BESAR saat infeed nyala — dihapus),
+  B→fault = gabungan `ifK`. Ukuran panah kontinu ∝ kA (ref hubung-singkat di Bus A),
+  kecepatan tetap 125 px/s. `computeFaultCircuit` kini dihitung setiap render (dipakai
+  panah); chip V/I tetap digerbang `P.showVI`. Diuji `tools/flow-anim.test.js` (17 asersi).
+- **Harness & tes di repo**: `tools/lens-harness.js`, `tools/readout.test.js`,
+  `tools/sld-v-i.test.js` (lihat bagian "Running it"). Harness diekspor fungsi baru hanya
+  bila nama fungsi sudah ada di daftar `__pub` — saat menambah fungsi baru utk diuji,
+  tambahkan ke daftar itu.
 
 ## Editing conventions
 
