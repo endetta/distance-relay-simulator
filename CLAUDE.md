@@ -20,7 +20,7 @@ npx serve
 
 There is no lint/build/test command. The JS **can** run outside the browser via a small Node mock-DOM harness (see `/tmp/diag3.js`, `/tmp/measure.js` for the pattern): stub `document`/`window` with elements that capture `innerHTML`, then run the `<script>` body with `new Function(code + ';global.__pub={render,S,P,computeModel};')()`, and regex-measure the generated `#plane` SVG. This is the pixel-level validation loop for the R–X plane (label placement, zoom anchor invariance, extreme pan, no-NaN). The seam under test is the generated SVG string — what the browser actually draws.
 
-In-repo harness & tests: `tools/lens-harness.js` stubs the DOM and exports `{render,S,P,computeModel,computeFaultCircuit,flowSegments,…}` plus captured elements (`els.<id>.innerHTML`/`textContent`); `tools/readout.test.js` verifies the readout/status card (`.side-card`) — summary sentence `.r-sum`, 3 group titles & row labels of `#readout`, and `#zoneLabel`/`#timeLabel` texts across trip/behind/no-trip/CT-PT-error scenarios. `tools/sld-v-i.test.js` verifies the SLD V/I feature: `computeFaultCircuit` literals (hand-derived) for a pure-X synthetic network across 3φ/φ-φ/φ-G × infeed off/×1/×4, loop tags, and the SVG chips / `P.showVI` toggle. `tools/flow-anim.test.js` verifies the SLD flow-arrow physics: `flowSegments` segment/colour/`kA` literals plus `#sld` arrow glyphs ∝ `kA` per lane (never copper on L2, nothing past the fault, constant 125 px/s speed). `tools/side-mode.test.js` verifies the trimmed layout & two-mode right card: `tripSequence(m)` order literals, `P.sideMode='seq'` DOM (status/readout/formula/SIR), and that `render()` no longer writes `#staircase`/`#typeNote`. Run with `node tools/readout.test.js` / `node tools/sld-v-i.test.js` / `node tools/flow-anim.test.js` / `node tools/side-mode.test.js`. All hard-code the HTML filename in their `fs.readFileSync`/`HTML` path — update if the file is ever renamed.
+In-repo harness & tests: `tools/lens-harness.js` stubs the DOM and exports `{render,S,P,computeModel,computeFaultCircuit,flowSegments,…}` plus captured elements (`els.<id>.innerHTML`/`textContent`); `tools/readout.test.js` verifies the readout/status card (`.side-card`, mode `'relay'`) — summary sentence `.r-sum`, the two titled groups of `#readout` (`Impedansi gangguan` → `Lokasi gangguan & jangkauan`; the old `Relay & karakteristik` group was trimmed), and `#zoneLabel`/`#timeLabel` texts across trip/behind/no-trip/CT-PT-error scenarios. `tools/sld-v-i.test.js` verifies the SLD V/I feature: `computeFaultCircuit` literals (hand-derived) for a pure-X synthetic network across 3φ/φ-φ/φ-G × infeed off/×1/×4, loop tags, and the SVG chips / `P.showVI` toggle. `tools/flow-anim.test.js` verifies the SLD flow-arrow physics: `flowSegments` segment/colour/`kA` literals plus `#sld` arrow glyphs ∝ `kA` per lane (never copper on L2, nothing past the fault, constant 125 px/s speed). `tools/side-mode.test.js` verifies the trimmed layout & two-mode right card: `tripSequence(m)` order literals, `P.sideMode='seq'` DOM (status/readout/formula/SIR incl. the zones being fully hidden — no leftover green block), and that `render()` no longer writes `#staircase`/`#typeNote`. Run with `node tools/readout.test.js` / `node tools/sld-v-i.test.js` / `node tools/flow-anim.test.js` / `node tools/side-mode.test.js`. All hard-code the HTML filename in their `fs.readFileSync`/`HTML` path — update if the file is ever renamed.
 
 ## Git & GitHub
 
@@ -59,7 +59,8 @@ The whole program is one `<script>` block, organized into these logical sections
 
 6. **Rendering** — four independent pure functions that each build an SVG string from `m` (model) and `dec` (decision) and set `innerHTML`:    - `renderPlane(m, dec)` — the R–X diagram (see *Rx diagram notes* below).    - `renderSLD(m)` — buses are thick vertical lines with relay boxes floating beside them (no arrows, no drop lines); a grid/infeed symbol below Bus B toggles `P.infeedOn` and stays in sync with its checkbox. The fault handle drags along the line (updates `S.pos`). All text is collected into the `lbl` string and appended LAST, each label carrying a paint-order halo — labels must never be buried under channel lines, fault arrows, or flow dashes (a past bug). The flow animation is ALWAYS drawn (no toggle) and re-renders with the fault position: lanes come from the pure `flowSegments(m, vi)` — L1 faults: red Sumber→fault (`ia`), copper B→fault (infeed `ib`, only when infeed on); L2 faults: red Sumber→B carries `ia` ONLY (never the infeed — a past artifact made it balloon at Bus B), B→fault is the combined red lane (`ifK`). Arrow glyph size is continuous ∝ `kA` (reference = bolted-at-A current `E/|ZsA|`), speed constant 125 px/s, nothing flows past the fault.
     - V/I chips (toggle `P.showVI` via `#viToggle`, default on): `computeFaultCircuit(m)` feeds a per-bus loop-voltage chip (`V/Vbc/Va … kV`, blue, above each bus) plus current chips — `I … kA` under the Sumber label, `· … kA` appended to the Infeed caption (only when infeed on), `· If … kA` appended to the fault label. All still go through `lbl`, so they get the halo and never bury channel lines.
-   - `updateReadout(m, dec)` — two-mode right card driven by `P.sideMode` (default `'relay'`): `'relay'` = the selected relay's status + `.r-sum` summary + 3-group readout + KaTeX formula + SIR note; `'seq'` = trip sequence from pure `tripSequence(m)` — enabled relays sorted by operating time (zone-1 instant first, ties by zone then id) then non-trip relays with reason (`di belakang relay` / `di luar jangkauan`); status highlights the first trip and `#formulaOut`/`#sirNote` are cleared. The staircase card (`renderStaircase`) and the `#typeNote`/`typeNotes` block were removed — `.main` ends at the `plane-row`, and the `.params-panel` height lock therefore stops at the bottom of the R–X card.
+   - `updateReadout(m, dec)` — two-mode right card driven by `P.sideMode` (default `'relay'`): `'relay'` = the selected relay's status + `.r-sum` summary + readout with TWO titled groups (`Impedansi gangguan`, `Lokasi gangguan & jangkauan`; group `Relay & karakteristik` was trimmed) + KaTeX formula + SIR note; `'seq'` = trip sequence from pure `tripSequence(m)` — enabled relays sorted by operating time (zone-1 instant first, ties by zone then id) then non-trip relays with reason (`di belakang relay` / `di luar jangkauan`); status highlights the first trip and the `#formulaOut`/`#sirNote` zones are hidden entirely (content AND inline background cleared — no leftover empty green block). The staircase card (`renderStaircase`) and the `#typeNote`/`typeNotes` block were removed.
+   - **Desktop height lock & SLD layout**: on ≥921px wide & ≥600px tall the whole page is locked to one viewport (`html,body{overflow:hidden}` + flex `.wrap`/`.layout`); only the `.params-panel` (and readout overflow if ever needed) scroll internally. The R–X svg is fit to the remaining column height by `fitPlane()` (aspect kept, `plane.style` px, `lockH()` gate), and the JS panel-height lock is bypassed in that mode. `renderSLD` content band is re-centered horizontally by ink extents (srcX 40→75, xA/xC 110/870→145/905) and compacted vertically (VBH 142→130, tightened label rows).
 
 7. **Master** `render()` — `computeModel()` → `decideRelay()` per relay → `renderPlane`, `renderSLD`, `updateReadout` (right card). This is the only entry point; every state change funnels through it.
 
@@ -91,9 +92,18 @@ Perubahan yang sudah masuk & wajib dijaga agar tidak rusak oleh edit berikutnya:
 - **Header halaman**: `.topbar .tt` 17px gradien `--blue→--teal` + dot copper; `.wrap`
   padding 14px/40px (compact). Var baru di `:root`: `--teal:#13697A`, `--copper-deep:#8C4E16`.
 - **Kartu readout** (`updateReadout`): ringkasan `.r-sum` (1 kalimat + angka kunci) di atas
-  tabel 3 grup (`Relay & karakteristik` / `Impedansi gangguan` / `Lokasi gangguan &
-  jangkauan`). Struktur ini diuji `tools/readout.test.js` — label lama (`Zone 1 reach`,
-  `Z asli (saluran, primer)`, dst.) sudah dihapus dari DOM.
+  tabel 2 grup (`Impedansi gangguan` / `Lokasi gangguan & jangkauan`; grup `Relay &
+  karakteristik` DIHAPUS — info relay sudah ada di daftar relay kiri). Struktur ini diuji
+  `tools/readout.test.js` — label lama (`Zone 1 reach`, `Z asli (saluran, primer)`, dst.)
+  sudah dihapus dari DOM.
+- **Kunci tinggi desktop & SLD compact/simetris (sesi ini)**: ≥921px & ≥600px → halaman
+  terkunci satu layar (body `overflow:hidden`; hanya panel & konten yang scroll internal),
+  kanvas R–X di-fit ke sisa tinggi via `fitPlane()` (`lockH()`), lock-tinggi JS panel
+  dilewati di mode itu. `renderSLD`: blok isi dipusatkan berbasis tinta (srcX 40→75,
+  xA/xC 110/870→145/905) & dirapatkan vertikal (VBH 142→130, baris label dirapatkan).
+- **Mode 'Sekuens trip' tanpa sisa blok hijau**: zona `#formulaOut`/`#sirNote` kini
+  disembunyikan penuh (display none + background di-clear) — dulu background hijau SIR
+  tertinggal kosong.
 - **Kartu kanan dua mode & pemangkasan layout (sesi ini)**: `#sideModeGroup`/`P.sideMode`
   (`'relay'` default | `'seq'`). Mode `'seq'` = sekuens trip dari `tripSequence(m)` (fungsi
   murni, diekspor `__pub`, diuji `tools/side-mode.test.js`): relay enabled urut waktu
@@ -104,8 +114,8 @@ Perubahan yang sudah masuk & wajib dijaga agar tidak rusak oleh edit berikutnya:
 - **Scrollbar tipis**: `.params-panel` 6px thumb pill `var(--line)` + track transparan +
   `scrollbar-width:thin` (Firefox).
 - **Chip V/I di SLD**: `computeFaultCircuit(m)` (lihat bullet model di atas) + `#viToggle`
-  (`P.showVI`). `viewBox` SLD = `980×142`; label `If … kA` adalah baris TERPISAH di bawah
-  label jenis gangguan, dan penanda copper "terlihat R1" berada di `y+70`.
+  (`P.showVI`). `viewBox` SLD = `980×130`; label `If … kA` adalah baris TERPISAH di bawah
+  label jenis gangguan, dan penanda copper "terlihat R1" berada di `y+62`.
 - **Animasi aliran SLD (revisi sesi ini)**: jalur & arus panah bersumber dari fungsi murni
   `flowSegments(m, vi)` (`ia`/`ib`/`ifK` dari `computeFaultCircuit`). Aturan segmen: fault
   L1 → merah Sumber→fault = `ia`, copper B→fault = `ib` (infeed); fault L2 → merah

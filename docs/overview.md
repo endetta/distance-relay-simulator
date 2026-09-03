@@ -68,21 +68,27 @@ Buka file langsung di browser (`file:///`), atau `python -m http.server` / `npx 
 - **Header halaman**: judul `Simulator Distance Relay` 17px gradien `--blue→--teal` + dot
   copper (`--teal` & `--copper-deep` ditambahkan ke `:root`); `.wrap` padding 14px/40px.
 - **Kartu readout** (`.side-card`, `updateReadout`): kotak status → kalimat ringkasan `.r-sum`
-  (bahasa manusia, angka kunci `<b>`) → tabel 3 grup berjudul (`Relay & karakteristik`,
-  `Impedansi gangguan`, `Lokasi gangguan & jangkauan`); baris `Z apparent (primer)` hanya
-  muncul jika ≠ Z asli; label reach `Reach zona 1/2/3`.
+  (bahasa manusia, angka kunci `<b>`) → tabel 2 grup berjudul (`Impedansi gangguan`,
+  `Lokasi gangguan & jangkauan`; grup `Relay & karakteristik` DIHAPUS); baris
+  `Z apparent (primer)` hanya muncul jika ≠ Z asli; label reach `Reach zona 1/2/3`.
 - **Kartu kanan dua mode + batas bawah halaman (sesi ini)**: tombol `#sideModeGroup`
-  (`P.sideMode` default `'relay'`) — `Relay terpilih` = konten lama; `Sekuens trip` =
-  `tripSequence(m)` (relay enabled urut waktu→zona→id; non-trip disertakan dgn alasan,
-  kotak status menyorot trip pertama, formula & SIR dikosongkan). Kartu waktu–impedansi
-  (`#staircase`) dan kotak catatan `#typeNote` DIHAPUS — kolom kanan kini berakhir di dasar
-  `plane-row` (bawah kartu R–X), panel parameter ikut terkunci di situ.
+  (`P.sideMode` default `'relay'`) — `Relay terpilih` = konten lama (grup `Relay &
+  karakteristik` DIHAPUS); `Sekuens trip` = `tripSequence(m)` (relay enabled urut
+  waktu→zona→id; non-trip disertakan dgn alasan, kotak status menyorot trip pertama).
+  Zona formula/SIR disembunyikan penuh di mode sekuens (tanpa sisa blok hijau). Kartu
+  waktu–impedansi (`#staircase`) & kotak catatan `#typeNote` DIHAPUS.
+- **Kunci tinggi desktop (sesi ini)**: di ≥921px lebar & ≥600px tinggi halaman terkunci
+  1 layar (`body overflow:hidden`; hanya panel/card yg scroll internal); kanvas R–X
+  di-fit ke sisa tinggi lewat `fitPlane()`; di luar itu (layar kecil) scroll normal.
+- **SLD compact & simetris (sesi ini)**: blok isi SLD dipusatkan kiri–kanan berbasis
+  tinta (sumber 75 → Bus A 145 … Bus C 905, gutter ≈53 px tiap sisi) & dirapatkan
+  vertikal (viewBox 142 → 130, baris label atas/bawah dirapatkan).
 - **Scrollbar tipis**: `.params-panel` 6px, thumb pill rounded, track transparan
   (`scrollbar-width:thin` utk Firefox).
 - **Chip V & I di SLD**: tombol `#viToggle` (`P.showVI`, default true) mengontrol chip
   tegangan per bus (`V/Vbc/Va … kV` di atas bus) dan arus (`I … kA` dekat Sumber,
   `· … kA` di kapten Infeed, `If … kA` baris sendiri di bawah label jenis gangguan).
-  SLD `viewBox` kini `980×142`.
+  SLD `viewBox` kini `980×130`.
 - **Animasi aliran SLD direvisi (sesi ini)**: fungsi murni `flowSegments(m, vi)` jadi
   satu-satunya sumber jalur & arus panah. Fault L1 → merah Sumber→fault = `ia`, copper
   B→fault = `ib` (infeed); fault L2 → merah Sumber→B = `ia` **saja** (artefak lama di mana
@@ -126,10 +132,10 @@ dan arus loop gangguan per sumber + total dalam kA primer. Uji literalnya ada di
 ## Validasi (tanpa build)
 
 ```bash
-node tools/readout.test.js   # 22 asersi kartu readout
+node tools/readout.test.js   # 24 asersi kartu readout (2 grup)
 node tools/sld-v-i.test.js   # 14 asersi model V/I + chip SLD
 node tools/flow-anim.test.js # 17 asersi panah aliran (flowSegments + #sld)
-node tools/side-mode.test.js # 14 asersi mode dua-mode & pemangkasan layout
+node tools/side-mode.test.js # 15 asersi mode dua-mode & pemangkasan layout
 ```
 
 Harness mengabaikan CSS & tidak punya hirarki DOM anak — teks status readout dibaca dari

@@ -56,8 +56,9 @@ function scenario(pos, infeedOn, infeed) {
   const segs = pub.flowSegments(m, vi);
   return { ctx, pub, m, vi, segs, sld: ctx.els.sld.innerHTML };
 }
-/* konstanta layout #sld (sama dgn renderSLD): srcX=40, xA=110, span=760, totalKm=180 */
-const SRC = 40, FAULT50 = 321.111, XB = 532.222, FAULT130 = 658.889;
+/* konstanta layout #sld (sama dgn renderSLD, setelah recenter simetris):
+   srcX=75, xA=145, span=760, totalKm=180 → xB=145+760·(100/180)=567.222 */
+const SRC = 75, FAULT50 = 356.111, XB = 567.222, FAULT130 = 693.889;
 /* ref arus = E/|ZsA| = 86.60254/10 = 8.660254 kA → glyph = 10 + 16·(kA/ref) */
 const glyph = kA => 10 + 16 * (kA / 8.660254);
 function segOf(segs, from, to) {

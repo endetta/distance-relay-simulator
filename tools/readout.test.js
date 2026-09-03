@@ -1,11 +1,12 @@
-/* Tes TDD kartu readout (.side-card) — struktur baru "ringkasan + tabel 3 grup".
+/* Tes TDD kartu readout (.side-card, mode 'relay') — struktur "ringkasan + 2 grup".
    Menjalankan <script> simulator lewat tools/lens-harness.js (stub DOM), lalu
    mengubah state S/P per skenario dan menegaskan DOM yang dihasilkan render().
 
    Seam yang diuji (disepakati dgn user):
      1. #statusBox  — teks zona & waktu (perilaku lama dipertahankan)
      2. #readout    — kalimat ringkasan (div .r-sum) sesuai skenario
-     3. #readout    — struktur tabel: 3 grup berjudul urut, label baru, label lama hilang
+     3. #readout    — struktur tabel: 2 grup berjudul urut (grup 'Relay & karakteristik'
+                      DIHAPUS), label baru, label lama hilang
 */
 'use strict';
 const path = require('path');
@@ -46,15 +47,19 @@ function assertStructure(readout, label) {
     if (b < 0) throw new Error('tidak ada .rgroup-title');
     if (!(a < b)) throw new Error('.r-sum harus sebelum judul grup');
   });
-  check(`[${label}] struktur: 3 judul grup dgn urutan benar`, () => {
-    const t1 = gi('Relay &amp; karakteristik'), t2 = gi('Impedansi gangguan'), t3 = gi('Lokasi gangguan &amp; jangkauan');
-    if ([t1, t2, t3].some(x => x < 0)) throw new Error(`judul grup hilang: ${[t1, t2, t3].map((x, i) => x < 0 ? i : null).filter(x => x !== null).join(',')}`);
-    if (!(t1 < t2 && t2 < t3)) throw new Error('urutan judul grup salah');
+  check(`[${label}] struktur: 2 judul grup dgn urutan benar (grup 'Relay & karakteristik' dihapus)`, () => {
+    const t1 = gi('Impedansi gangguan'), t2 = gi('Lokasi gangguan &amp; jangkauan');
+    if ([t1, t2].some(x => x < 0)) throw new Error(`judul grup hilang: ${[t1, t2].map((x, i) => x < 0 ? i : null).filter(x => x !== null).join(',')}`);
+    if (!(t1 < t2)) throw new Error('urutan judul grup salah');
     const n = (readout.match(/class="rgroup-title"/g) || []).length;
-    if (n !== 3) throw new Error(`jumlah grup ${n}, harus 3`);
+    if (n !== 2) throw new Error(`jumlah grup ${n}, harus 2`);
+  });
+  check(`[${label}] struktur: grup relay & karakteristik hilang dari readout`, () => {
+    notContains(readout, 'Relay &amp; karakteristik', label);
+    notContains(readout, 'Karakteristik', label);
   });
   check(`[${label}] struktur: label teknis baru hadir`, () => {
-    ['Z apparent (sekunder)', '|Z| \u2220\u03b8', 'Reach zona 1', 'Reach zona 2', 'Reach zona 3', 'Karakteristik', 'Z asli (primer)']
+    ['Z apparent (sekunder)', '|Z| \u2220\u03b8', 'Reach zona 1', 'Reach zona 2', 'Reach zona 3', 'Z asli (primer)']
       .forEach(s => contains(readout, s, label));
   });
   check(`[${label}] struktur: label lama yang digantikan hilang`, () => {
@@ -91,8 +96,9 @@ console.log('\nSkenario 2 — fault di L2 (pos=135) → R1 TRIP ZONE 2 t=0.40s')
     contains(readout, 'masuk <b>Zona 2</b>', 'S2 summary');
     contains(readout, '0.40 s', 'S2 summary');
   });
-  check('S2: baris relay memuat nama relay terpilih', () => {
-    contains(readout, 'Relay Bus A', 'S2 relay row');
+  check('S2: status tetap mengidentifikasi relay terpilih (R1)', () => {
+    contains(status, 'R1: TRIP \u2014 ZONE 2', 'S2 status id');
+    notContains(readout, 'Relay Bus A', 'S2 readout');
   });
 }
 

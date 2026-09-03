@@ -86,7 +86,7 @@
   .mini-btn.playing{background:var(--red);border-color:var(--red);color:#fff;font-weight:600;}
 
   .main{display:flex;flex-direction:column;gap:16px;}
-  .sld-card{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px 8px;}
+  .sld-card{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 16px 8px;}
   #viToggle{position:absolute;top:7px;right:10px;z-index:3;padding:3px 9px;font-size:10.5px;}
 
   /* animasi aliran daya pada SLD — PANAH berjalan sepanjang saluran (animateMotion).
@@ -135,6 +135,23 @@
   /* pemilih mode kartu kanan: 'Relay terpilih' vs 'Sekuens trip' */
   .side-switch{margin:0 0 12px;}
   .readout .rline.dim{opacity:.55;}
+
+  /* ===== kunci tinggi DESKTOP: seluruh simulator = 1 layar (halaman tak scroll),
+     scroll hanya terjadi DI DALAM kartu/kolom. Aktif utk lebar ≥921px & tinggi ≥600px;
+     di bawah itu (layar kecil/pendek) kembali ke scroll halaman normal. ===== */
+  @media (min-width:921px) and (min-height:600px){
+    html,body{height:100%;overflow:hidden;}
+    .wrap{height:100%;padding:10px 22px 12px;display:flex;flex-direction:column;}
+    .topbar{flex:none;}
+    .layout{flex:1;min-height:0;grid-template-columns:300px minmax(0,1fr);grid-template-rows:minmax(0,1fr);gap:14px;align-items:stretch;}
+    .layout>div{min-height:0;display:flex;flex-direction:column;}
+    .params-panel{height:auto!important;min-height:0;flex:1;}
+    .main{overflow:hidden;}
+    .sld-card{flex:none;}
+    .plane-row{flex:1;min-height:0;}
+    .plane-card,.side-card{min-height:0;}
+    .side-card{overflow:hidden;}
+  }
 
   /* relay list */
   .relay-item{display:flex;align-items:center;gap:8px;padding:8px 9px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;background:var(--surface);cursor:pointer;transition:.12s;}
@@ -333,7 +350,7 @@
 
       <div class="sld-card">
         <button class="mini-btn on" id="viToggle" title="Tampilkan/sembunyikan tegangan bus & arus">V &amp; I: nyala</button>
-        <svg id="sld" viewBox="0 0 980 142" width="100%" style="display:block;cursor:pointer;"></svg>
+        <svg id="sld" viewBox="0 0 980 130" width="100%" style="display:block;cursor:pointer;"></svg>
       </div>
 
       <div class="plane-row">
@@ -1096,13 +1113,15 @@ function sldDragOK(px,py,faultX,y){
 }
 function renderSLD(m){
   const svg=$('sld');
-  /* VBH=142: ruang bawah utk label If (baris sendiri) & penanda "terlihat" relay */
-  const VBW=980,VBH=142, y=58, half=24;
+  /* VBH=130: kompak — ruang atas/bawah cukup utk chip V (atas) & label If/"terlihat" (bawah) */
+  const VBW=980,VBH=130, y=58, half=24;
   const totalKm=P.l1+P.l2;
-  /* Simetri kiri–kanan: margin kiri = margin kanan (xA = VBW − xC). Saluran A–B–C
-     digambar PROPORSIONAL km (l1 : l2), jadi panjang garis = panjang saluran sebenarnya. */
-  const srcX=40;
-  const xA=110, xC=980-110, span=xC-xA;
+  /* Simetri KIRI–KANAN berbasis tinta: blok isi (simbol sumber → label Bus C) dipusatkan
+     dgn gutter kiri = gutter kanan. Sumber punya segmen masuk 70 px (srcX=75 → xA=145);
+     label Bus C melebar ~22 px ke kanan (xC=905 → tinta ≈927), jadi gutter ≈53 px tiap sisi.
+     Saluran A–B–C digambar PROPORSIONAL km (l1 : l2) → xB mengikuti rasio saluran. */
+  const srcX=75;
+  const xA=145, xC=905, span=xC-xA;
   const xB=xA+span*(P.l1/Math.max(totalKm,0.001));
   const faultX=xA+span*(P.pos/Math.max(totalKm,0.001));
   /* nilai V bus & arus gangguan — dihitung SELALU (dipakai panah aliran & chip V/I).
@@ -1122,7 +1141,7 @@ function renderSLD(m){
   s+=`<line x1="${srcX}" y1="${y-13}" x2="${srcX}" y2="${y+13}" stroke="var(--blue)" stroke-width="3"/>`;
   s+=`<circle cx="${srcX}" cy="${y}" r="3.5" fill="var(--blue)"/>`;
   lbl+=`<text x="${srcX}" y="${y+22}" font-family="JetBrains Mono" font-size="10" fill="var(--ink-soft)" text-anchor="middle" style="${halo}">Sumber</text>`;
-  if(P.showVI) lbl+=`<text x="${srcX}" y="${y+35}" font-family="JetBrains Mono" font-size="9.5" fill="var(--red)" text-anchor="middle" font-weight="600" style="${halo}">I ${fmt(vi.currents.ia,1)} kA</text>`;
+  if(P.showVI) lbl+=`<text x="${srcX}" y="${y+31}" font-family="JetBrains Mono" font-size="9.5" fill="var(--red)" text-anchor="middle" font-weight="600" style="${halo}">I ${fmt(vi.currents.ia,1)} kA</text>`;
 
   /* bus = garis vertikal tebal (terhubung penuh, tanpa celah) */
   const bus=(x,label)=>`
@@ -1195,7 +1214,7 @@ function renderSLD(m){
     <line x1="${xB-10}" y1="${y+30}" x2="${xB+10}" y2="${y+30}" stroke="${gc1}" stroke-width="1.2"/>
   </g>`;
   const infeedLbl=`Infeed ${gi?'on':'off'}`+(P.showVI&&gi?` · ${fmt(vi.currents.ib,1)} kA`:'');
-  lbl+=`<text x="${xB+20}" y="${y+29}" font-family="JetBrains Mono" font-size="8.5" fill="${gi?'var(--blue)':'var(--line)'}" text-anchor="start" style="${halo}">${infeedLbl}</text>`;
+  lbl+=`<text x="${xB+20}" y="${y+27}" font-family="JetBrains Mono" font-size="8.5" fill="${gi?'var(--blue)':'var(--line)'}" text-anchor="start" style="${halo}">${infeedLbl}</text>`;
 
   const ftLabel=P.faultType==='3ph'?'3φ':P.faultType==='phph'?'φ-φ':'φ-G';
   /* label mengikuti mode gangguan: R → "Rf=..Ω", Z → "Zf=R+jX Ω" */
@@ -1208,9 +1227,9 @@ function renderSLD(m){
       <polygon points="${faultX-7},${y-30} ${faultX+7},${y-30} ${faultX},${y-18}" fill="var(--red)"/>
       <circle cx="${faultX}" cy="${y}" r="9" fill="var(--red)" opacity="0.15"/>
     </g>`;
-  lbl+=`<text x="${flx}" y="${y+46}" font-family="JetBrains Mono" font-size="10" fill="var(--red)" text-anchor="middle" font-weight="600" style="${halo}">${zfLabel}</text>`;
+  lbl+=`<text x="${flx}" y="${y+42}" font-family="JetBrains Mono" font-size="10" fill="var(--red)" text-anchor="middle" font-weight="600" style="${halo}">${zfLabel}</text>`;
   /* arus gangguan total — baris sendiri DI BAWAH label jenis gangguan */
-  if(P.showVI) lbl+=`<text x="${flx}" y="${y+58}" font-family="JetBrains Mono" font-size="10" fill="var(--red)" text-anchor="middle" font-weight="600" style="${halo}">If ${fmt(vi.currents.ifK,1)} kA</text>`;
+  if(P.showVI) lbl+=`<text x="${flx}" y="${y+52}" font-family="JetBrains Mono" font-size="10" fill="var(--red)" text-anchor="middle" font-weight="600" style="${halo}">If ${fmt(vi.currents.ifK,1)} kA</text>`;
 
   /* ===== animasi aliran daya — per segmen dari flowSegments() (fisika radial) =====
      Setiap jalur memakai kA kontribusinya (ia / ib / ifK) → ukuran panah ∝ arus,
@@ -1244,7 +1263,7 @@ function renderSLD(m){
           <line x1="${percX}" y1="${y-24}" x2="${percX}" y2="${y+24}" stroke="var(--copper)" stroke-width="1.5" stroke-dasharray="3 2"/>
           <polygon points="${percX},${y-9} ${percX+6},${y} ${percX},${y+9} ${percX-6},${y}" fill="var(--surface)" stroke="var(--copper)" stroke-width="1.8"/>
         </g>`;
-        lbl+=`<text x="${lpx}" y="${y+70}" font-family="JetBrains Mono" font-size="9" fill="var(--copper)" text-anchor="middle" style="${halo}">terlihat ${selR.id}</text>`;
+        lbl+=`<text x="${lpx}" y="${y+62}" font-family="JetBrains Mono" font-size="9" fill="var(--copper)" text-anchor="middle" style="${halo}">terlihat ${selR.id}</text>`;
       }
     }
   }
@@ -1323,8 +1342,9 @@ function updateSeqReadout(m){
       ${rowsTrip||'<div class="rline"><span>—</span><span>tidak ada relay trip</span></div>'}
     </div>
     ${rowsNot?`<div class="rgroup"><div class="rgroup-title">Tidak trip</div>${rowsNot}</div>`:''}`;
-  $('formulaOut').innerHTML='';
-  $('sirNote').textContent='';
+  /* sembunyikan zona detail relay terpilih SEPENUHNYA (tanpa sisa blok hijau) */
+  $('formulaOut').innerHTML=''; $('formulaOut').style.display='none';
+  $('sirNote').textContent=''; $('sirNote').style.display='none'; $('sirNote').style.background='';
 }
 function updateReadout(m,decisions){
   $('z1out').textContent=`Z1 = ${fmt(m.Z1p.R,2)} + j${fmt(m.Z1p.X,2)} Ω`;
@@ -1332,6 +1352,9 @@ function updateReadout(m,decisions){
   $('sirOut').innerHTML=`SIR = |Zs|/|Z1| = <b>${fmt(m.SIR,2)}</b>`;
   $('loadzOut').textContent=`Lensa beban ${fmt(m.loadzMin,1)}–${fmt(m.loadzNom,1)} Ω · titik sistem ${fmt(mag(m.zlNow),1)} Ω ∠${fmt(P.loadAngNow,0)}°`;
   if(P.sideMode==='seq'){ updateSeqReadout(m); return; }
+  /* mode relay terpilih: zona formula & SIR ditampilkan kembali (di mode seq disembunyikan) */
+  $('formulaOut').style.display='';
+  $('sirNote').style.display='';
 
   const sel=S.relays.find(r=>r.id===S.selectedRelayId);
   const dec=decisions[sel.id];
@@ -1367,10 +1390,6 @@ function updateReadout(m,decisions){
     ? `<div class="rline"><span>Z apparent (primer)</span><span>${zc(fzSel.zPrim)}${behindNote}</span></div>` : '';
   $('readout').innerHTML=`
     <div class="r-sum">${summary}</div>
-    <div class="rgroup"><div class="rgroup-title">Relay &amp; karakteristik</div>
-      <div class="rline"><span>Relay</span><span>${sel.name}</span></div>
-      <div class="rline"><span>Karakteristik</span><span>${sel.charType}</span></div>
-    </div>
     <div class="rgroup"><div class="rgroup-title">Impedansi gangguan</div>
       <div class="rline key"><span>Z apparent (sekunder)</span><span>${zc(fzSel.z)}${behindNote}</span></div>
       <div class="rline"><span>|Z| ∠θ</span><span>${fmt(mag(fzSel.z),3)} Ω ∠${fmt(deg(ang(fzSel.z)),1)}°</span></div>
@@ -1471,20 +1490,34 @@ function render(){
 buildRelayList();
 render();
 
-/* ---------- kunci tinggi panel parameter = tinggi kolom kanan (SLD → RX diagram) ---------- */
-/* Panel parameter jadi satu section scroll-sendiri; tingginya mengikuti .main — kini
-   berakhir di dasar plane-row (kartu R–X + kartu kanan), jadi batas bawah scroll panel
-   = dasar diagram R–X. Sinkron via ResizeObserver agar tetap pas saat resize/collapse.
-   Di layar sempit (≤920px) kunci dilepas — CSS `height:auto!important` mengesampingkan
-   gaya inline, dan JS pun berhenti menulis tinggi. */
+/* ---------- kunci tinggi halaman & tinggi panel parameter ----------
+   Mode layar-terkunci (lockH): halaman dikunci 1 layar (CSS media query di atas);
+   panel parameter jadi flex pengisi kolom (JS berhenti menulis tinggi px) dan kanvas
+   R–X di-fit agar plane-row selalu muat tanpa scroll halaman (fitPlane). Di luar mode
+   terkunci (layar sempit/pendek): perilaku lama — panel mengikuti .main dgn tinggi px. */
+const lockH=()=>matchMedia('(min-width:921px) and (min-height:600px)').matches;
+function fitPlane(){
+  const pc=document.querySelector('.plane-card'), svg=$('plane');
+  if(!pc||!svg) return;
+  if(!lockH()){ svg.style.width=''; svg.style.height=''; return; } // kembali ke width:100%
+  const r=pc.getBoundingClientRect();
+  const tb=pc.querySelector('.toolbar'), lg=$('legend');
+  const hTb=tb?tb.getBoundingClientRect().height:0, hLg=lg?lg.getBoundingClientRect().height:0;
+  const avail=Math.max(200, r.height-hTb-hLg-46);   // 46 = padding kartu + jarak antar-baris
+  const w=Math.min(r.width-34, avail*VBG/VBH2);      // jaga rasio 640:470 (lingkaran tetap bulat)
+  const h=Math.round(w*VBH2/VBG);
+  svg.style.width=Math.round(w)+'px';
+  svg.style.height=h+'px';
+}
 (function(){
   const panel=$('paramsPanel'), main=document.querySelector('.main');
   if(!panel||!main) return;
   const narrow=()=>matchMedia('(max-width:920px)').matches;
   function sync(){
-    if(narrow()){ panel.style.height=''; return; }
+    if(narrow()||lockH()){ panel.style.height=''; fitPlane(); return; }
     const h=Math.round(main.getBoundingClientRect().height);
     if(h>0) panel.style.height=Math.max(h,340)+'px';   // 340 = minimum tetap usable
+    fitPlane();
   }
   sync();
   new ResizeObserver(sync).observe(main);

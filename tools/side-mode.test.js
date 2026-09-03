@@ -125,11 +125,18 @@ console.log('\nMode Sekuens trip — kartu kanan');
     if (ctx.els.formulaOut.innerHTML !== '') throw new Error('formulaOut harus kosong di mode seq');
     if (ctx.els.sirNote.textContent !== '') throw new Error('sirNote harus kosong di mode seq');
   });
-  check('kembali ke mode relay: konten readout/status lama pulih', () => {
+  check('mode seq: zona formula & SIR disembunyikan — tak ada blok hijau kosong', () => {
+    if (ctx.els.formulaOut.style.display !== 'none') throw new Error(`formulaOut display=${ctx.els.formulaOut.style.display}, harus none`);
+    if (ctx.els.sirNote.style.display !== 'none') throw new Error(`sirNote display=${ctx.els.sirNote.style.display}, harus none`);
+    if (ctx.els.sirNote.style.background) throw new Error(`sirNote masih bergaris-bawah: ${ctx.els.sirNote.style.background}`);
+  });
+  check('kembali ke mode relay: konten readout/status pulih & zona formula/SIR tampil lagi', () => {
     pub.P.sideMode = 'relay';
     pub.render();
     contains(ctx.els.readout.innerHTML, 'class="r-sum"', 'readout relay lagi');
     contains(ctx.els.zoneLabel.textContent, 'R1: TRIP — ZONE 2', 'status relay lagi');
+    if (ctx.els.sirNote.style.display === 'none') throw new Error('sirNote harus tampil lagi di mode relay');
+    if (!ctx.els.sirNote.textContent) throw new Error('sirNote harus berisi teks di mode relay');
   });
 }
 {
