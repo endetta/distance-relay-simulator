@@ -11,12 +11,12 @@
 <style>
   :root{
     --bg:#F1F3F0; --surface:#FFFFFF; --ink:#16233A; --ink-soft:#4A5568;
-    --blue:#1F4E8C; --blue-soft:#E7EEF6; --copper:#B5651D; --copper-soft:#F5E9DC;
+    --blue:#1F4E8C; --blue-soft:#E7EEF6; --teal:#13697A; --copper:#B5651D; --copper-deep:#8C4E16; --copper-soft:#F5E9DC;
     --line:#D6DAD2; --red:#C0392B; --red-soft:#F8E4E1; --green:#2E7D46; --green-soft:#E3F1E7;
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;font-size:14px;line-height:1.5;}
-  .wrap{max-width:1560px;margin:0 auto;padding:28px 22px 60px;}
+  .wrap{max-width:1560px;margin:0 auto;padding:14px 22px 40px;}
 
   .layout{display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start;}
   @media(max-width:920px){.layout{grid-template-columns:1fr;}}
@@ -74,7 +74,11 @@
   .mini-btn{padding:5px 9px;border:1px solid var(--line);background:var(--surface);border-radius:7px;font-size:11.5px;font-weight:500;color:var(--ink-soft);cursor:pointer;}
   .mini-btn:hover{border-color:var(--blue);color:var(--blue);}
   .topbar{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
-  .topbar .tt{font-family:'Space Grotesk',sans-serif;font-size:12.5px;font-weight:600;margin-right:auto;line-height:1.2;}
+  /* judul halaman: dot copper + teks gradien biru→toska (tetap satu baris dgn tombol) */
+  .topbar .tt{display:inline-flex;align-items:center;font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;letter-spacing:-.01em;margin-right:auto;line-height:1.2;
+    background:linear-gradient(100deg,var(--blue) 15%,var(--teal) 85%);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;}
+  .topbar .tt::before{content:'';width:9px;height:9px;border-radius:50%;background:var(--copper);box-shadow:0 0 0 3.5px var(--copper-soft);margin-right:11px;flex:none;}
   .mini-btn.hl{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600;padding:6px 12px;}
   .topbar .mini-btn.hl{padding:2px 10px;line-height:1.2;}
   .mini-btn.hl:hover{background:#16385F;color:#fff;}
@@ -82,7 +86,8 @@
   .mini-btn.playing{background:var(--red);border-color:var(--red);color:#fff;font-weight:600;}
 
   .main{display:flex;flex-direction:column;gap:16px;}
-  .sld-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px 8px;}
+  .sld-card{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px 8px;}
+  #viToggle{position:absolute;top:7px;right:10px;z-index:3;padding:3px 9px;font-size:10.5px;}
 
   /* animasi aliran daya pada SLD — PANAH berjalan sepanjang saluran (animateMotion).
      Arah panah = arah aliran daya (rotate:auto). Jarak antar-panah lega agar mudah
@@ -139,9 +144,60 @@
   .modal .sub{font-size:11px;color:var(--ink-soft);font-family:'JetBrains Mono',monospace;margin-bottom:12px;}
   .modal .close{float:right;cursor:pointer;color:var(--ink-soft);font-size:18px;line-height:1;}
   .modal .foot{display:flex;justify-content:flex-end;margin-top:12px;}
+
+  /* ===== splash pembuka: tirai bersih kiri→kanan, palet krem/ivory hangat =====
+     Masuk: tepi kanan lembaran menyapu dari kiri ke kanan (satu sisi, tanpa sudut/kotak).
+     Keluar: lembaran penuh menyapu ke kanan. Teks pakai --ink & --copper dari desain. */
+  #root{position:relative;}
+  #splash{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+    background:
+      radial-gradient(900px 600px at 16% 10%,rgba(181,101,29,.08),transparent 62%),
+      radial-gradient(760px 540px at 86% 92%,rgba(181,101,29,.07),transparent 62%),
+      linear-gradient(135deg,#FDFAF3 0%,#F8EFE1 100%);
+    transform:translateX(-101%);   /* tersembunyi di luar kiri */
+    transition:transform .4s cubic-bezier(.25,.6,.25,1);
+    cursor:pointer;
+  }
+  #splash.go{transform:none;}
+  #splash.out{transform:translateX(101%);transition:transform .45s cubic-bezier(.6,0,.85,.35);}
+  #splash .sp-title{font-family:'Space Grotesk',sans-serif;font-weight:700;letter-spacing:-.015em;font-size:clamp(23px,4.4vw,40px);text-align:center;padding:0 18px;opacity:0;
+    background:linear-gradient(100deg,var(--ink) 25%,var(--copper-deep) 95%);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;}
+  #splash.go .sp-title{animation:spUp .34s cubic-bezier(.2,.75,.3,1) .38s both;}
+  #splash .sp-rule{width:62px;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--copper),var(--copper-soft));opacity:0;}
+  #splash.go .sp-rule{animation:spWide .3s ease .5s both;}
+  #splash .sp-letters{display:flex;gap:13px;}
+  #splash .sp-letters span{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:16px;letter-spacing:.18em;color:var(--copper);opacity:0;}
+  #splash.go .sp-letters span:nth-child(1){animation:spL .22s ease .60s both;}
+  #splash.go .sp-letters span:nth-child(2){animation:spL .22s ease .65s both;}
+  #splash.go .sp-letters span:nth-child(3){animation:spL .22s ease .70s both;}
+  #splash.go .sp-letters span:nth-child(4){animation:spL .22s ease .75s both;}
+  #splash.go .sp-letters span:nth-child(5){animation:spL .22s ease .80s both;}
+  @keyframes spUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  @keyframes spWide{from{opacity:0;transform:scaleX(.15)}to{opacity:1;transform:scaleX(1)}}
+  @keyframes spL{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+  @keyframes spMain{from{opacity:0;transform:translateY(10px) scale(.995)}to{opacity:1;transform:none}}
+  /* halaman utama DIHILANGKAN sejak awal; hanya muncul saat tirai mulai mundur (.ready)
+     sehingga tak pernah terlihat sebelum animasi selesai bagian depannya */
+  .wrap{opacity:0;}
+  #root.ready .wrap{animation:spMain .55s cubic-bezier(.22,.75,.28,1) both;}
+  @media (prefers-reduced-motion: reduce){
+    #splash{display:none;}
+    #root.ready .wrap{opacity:1;animation:none;}
+  }
 </style>
+<noscript><style>.wrap{opacity:1!important;}</style></noscript>
 </head>
 <body>
+<div id="root">
+
+  <!-- splash pembuka: lembaran gelap menyapu dari kiri-atas, lalu keluar ke kanan-bawah -->
+  <div id="splash" aria-hidden="true">
+    <div class="sp-title">Distance Relay Simulator</div>
+    <div class="sp-rule"></div>
+    <div class="sp-letters"><span>S</span><span>H</span><span>E</span><span>V</span><span>A</span></div>
+  </div>
+
 <div class="wrap">
 
   <div class="topbar">
@@ -262,6 +318,7 @@
     <div class="main">
 
       <div class="sld-card">
+        <button class="mini-btn on" id="viToggle" title="Tampilkan/sembunyikan tegangan bus & arus">V &amp; I: nyala</button>
         <svg id="sld" viewBox="0 0 980 124" width="100%" style="display:block;cursor:pointer;"></svg>
       </div>
 
@@ -336,6 +393,7 @@
     <div class="foot"><button class="mini-btn" id="modalClose2">Tutup</button></div>
   </div>
 </div>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
 <script>
@@ -367,7 +425,8 @@ let S={
     vLL_kV:150, loadMVA:120, pfAngleDeg:30, loadEncroachDeg:5,
     loadNow:84, loadAngNow:30,
     showZones:true, showLoad:true,
-    faultType:'3ph', pos:50, rf:0, rfMode:'R', xf:0, infeed:1, infeedOn:true, ctErr:0, ptErr:0
+    faultType:'3ph', pos:50, rf:0, rfMode:'R', xf:0, infeed:1, infeedOn:true, ctErr:0, ptErr:0,
+    showVI:true
   },
   relays:[
     defaultRelay('R1','Relay Bus A → Bus B','A','fwd','L1'),
@@ -426,6 +485,14 @@ bindRange('vLL_kV','vLL_kV','',0);
 $('showZones').addEventListener('change',()=>{P.showZones=$('showZones').checked;render();});
 $('showLoad').addEventListener('change',()=>{P.showLoad=$('showLoad').checked;render();});
 
+/* tombol chip V & I di SLD: sembunyikan/tampilkan tegangan bus & arus */
+$('viToggle').addEventListener('click',()=>{
+  P.showVI=!P.showVI;
+  const b=$('viToggle');
+  b.textContent=P.showVI?'V & I: nyala':'V & I: mati';
+  b.classList.toggle('on',P.showVI);
+  render();
+});
 $('animateBtn').addEventListener('click',()=>{
   const btn=$('animateBtn');
   if(animTimer){ clearInterval(animTimer); animTimer=null; btn.textContent='▶ Animasikan sapuan gangguan'; btn.classList.remove('playing'); return; }
@@ -676,6 +743,72 @@ function decideRelay(relay,m){
   return {zone:0,time:null};
 }
 
+/* ---------- tegangan bus & arus gangguan (utk chip V/I di SLD) ----------
+   Model setara utk tampilan (asumsi dicatat): E = VLL/√3 kV di belakang ZsA;
+   sudut sumber = sudut saluran L1. Infeed (saat P.infeedOn) = sumber kedua dgn EMF
+   sama & ZsB = ZsA/P.infeed (× besar → sumber B lebih kuat). Gangguan dihitung
+   komponen-simetris klasik per tipe (3φ / φ-φ / φ-G) dgn asumsi Z1=Z2=Z0 di saluran
+   & sumber (grounded); beban diabaikan. Arus terbagi antara jalur A & B via pembagi
+   impedansi; segmen pasif di belakang titik gangguan tak dialiri arus → tegangannya
+   = tegangan titik gangguan. Keluaran: per bus tegangan LOOP yg diukur relay
+   (3φ/φ-φ: |Vb−Vc|, φ-G: |Va|) dlm kV primer; arus loop gangguan per sumber
+   (ia/ib) & total (ifK) dlm kA primer. */
+function computeFaultCircuit(m){
+  const E=C(P.vLL_kV/Math.sqrt(3),0);                     // EMF fasa (kV)
+  const th=ang(m.Z1p);                                    // sudut sumber ≈ sudut Z1
+  const ZsA=fromPolar(Math.max(P.zsmag,1e-3),th);
+  const on=!!P.infeedOn;
+  const ZsB=on?scl(ZsA,1/Math.max(P.infeed,0.1)):null;
+  const L1=Math.max(P.l1,1e-9), L2=Math.max(P.l2,1e-9);
+  const pos=Math.min(Math.max(P.pos,0),P.l1+P.l2);
+  const ZL1=scl(C(P.r1,P.x1),L1), ZL2=scl(C(P.r2,P.x2),L2);
+  const f1=Math.min(1,pos/L1), f2=Math.min(1,Math.max(0,(pos-L1)/L2));
+  const ZtoFault=add(scl(ZL1,f1),scl(ZL2,f2));            // dari A ke titik gangguan
+  const ZBtoFault=pos<=L1?scl(ZL1,1-f1):scl(ZL2,f2);      // dari B ke titik gangguan
+  const ZAtot=add(ZsA,ZtoFault), ZBtot=on?add(ZsB,ZBtoFault):null;
+  const cdiv=(a,b)=>{const d=b.R*b.R+b.X*b.X;return C((a.R*b.R+a.X*b.X)/d,(a.X*b.R-a.R*b.X)/d);};
+  const cmul=(a,b)=>C(a.R*b.R-a.X*b.X,a.R*b.X+a.X*b.R);
+  const Zeq=ZBtot?cdiv(cmul(ZAtot,ZBtot),add(ZAtot,ZBtot)):ZAtot;   // Thevenin per urutan
+  const Zf=C(P.rf,(P.rfMode==='Z')?P.xf:0);
+  let I1f,I2f,I0f;
+  if(P.faultType==='phph'){ I1f=cdiv(E,add(scl(Zeq,2),Zf)); I2f=scl(I1f,-1); I0f=C(0,0); }
+  else if(P.faultType==='phg'){ I1f=cdiv(E,scl(add(Zeq,Zf),3)); I2f=I1f; I0f=I1f; }
+  else { I1f=cdiv(E,add(Zeq,Zf)); I2f=C(0,0); I0f=C(0,0); }
+  const rA=ZBtot?cdiv(ZBtot,add(ZAtot,ZBtot)):C(1,0);     // porsi arus lewat jalur A
+  const rB=ZBtot?cdiv(ZAtot,add(ZAtot,ZBtot)):C(0,0);
+  const I1A=cmul(I1f,rA), I1B=cmul(I1f,rB);
+  const I2A=cmul(I2f,rA), I2B=cmul(I2f,rB);
+  const I0A=cmul(I0f,rA), I0B=cmul(I0f,rB);
+  /* tegangan urutan pd titik jalur A/B: V1 = E − I1·Zup; V2/V0 = −I2/0·Zup */
+  const seqAt=(I1,I2,I0)=>Zup=>({v1:sub(E,cmul(I1,Zup)), v2:scl(cmul(I2,Zup),-1), v0:scl(cmul(I0,Zup),-1)});
+  const sA=seqAt(I1A,I2A,I0A), sB=seqAt(I1B,I2B,I0B);
+  const seqFault=sA(ZAtot);                               // titik gangguan (identik dari B)
+  const a=C(-0.5,Math.sqrt(3)/2), a2=C(-0.5,-Math.sqrt(3)/2);   // e^{±j120°}
+  const phases=q=>({
+    aV:add(add(q.v0,q.v1),q.v2),
+    bV:add(q.v0,add(cmul(a2,q.v1),cmul(a,q.v2))),
+    cV:add(q.v0,add(cmul(a,q.v1),cmul(a2,q.v2)))
+  });
+  const kv=q=>{ const p=phases(q); if(P.faultType==='phg') return mag(p.aV); return mag(sub(p.bV,p.cV)); };
+  const tag=P.faultType==='phg'?'Va':P.faultType==='phph'?'Vbc':'V';
+  const faultOnL1=pos<=L1;
+  let qA,qB,qC;
+  qA=sA(ZsA);                                           // Bus A selalu di jalur A (setelah ZsA)
+  if(faultOnL1){
+    qB=on?sB(ZsB):seqFault;                             // fault L1: B dicatu infeed, atau pasif
+    qC=qB;                                              // C stub L2 tanpa arus → sama dgn B
+  }else{
+    qB=on?sB(ZsB):sA(add(ZsA,ZL1));                     // fault L2: B dicatu infeed / pd jalur A
+    qC=seqFault;                                        // C stub pasif di belakang fault
+  }
+  const mult=P.faultType==='phph'?Math.sqrt(3):P.faultType==='phg'?3:1;
+  const src=P.faultType==='phph'?I1f:(P.faultType==='phg'?I0f:I1f);
+  return {
+    buses:{ A:{loopKv:kv(qA),tag}, B:{loopKv:kv(qB),tag}, C:{loopKv:kv(qC),tag} },
+    currents:{ ia:mag(I1A)*mult, ib:on?mag(I1B)*mult:0, ifK:mag(src)*mult }
+  };
+}
+
 /* ---------- R-X plane (fit + zoom/pan + semua relay, koordinat global) ---------- */
 function renderPlane(m,decisions){
   const svg=$('plane');
@@ -909,6 +1042,8 @@ function renderSLD(m){
   const xA=110, xC=980-110, span=xC-xA;
   const xB=xA+span*(P.l1/Math.max(totalKm,0.001));
   const faultX=xA+span*(P.pos/Math.max(totalKm,0.001));
+  /* nilai V bus & arus gangguan — dipakai chip label kecil di bawah/atas bus & segmen */
+  const vi=P.showVI?computeFaultCircuit(m):null;
   let s='';
   /* semua LABEL teks dikumpulkan di `lbl` dan dirender PALING AKHIR — teks tidak
      pernah tertimpa garis saluran, panah gangguan, maupun dash aliran (bug lama:
@@ -923,6 +1058,7 @@ function renderSLD(m){
   s+=`<line x1="${srcX}" y1="${y-13}" x2="${srcX}" y2="${y+13}" stroke="var(--blue)" stroke-width="3"/>`;
   s+=`<circle cx="${srcX}" cy="${y}" r="3.5" fill="var(--blue)"/>`;
   lbl+=`<text x="${srcX}" y="${y+22}" font-family="JetBrains Mono" font-size="10" fill="var(--ink-soft)" text-anchor="middle" style="${halo}">Sumber</text>`;
+  if(vi) lbl+=`<text x="${srcX}" y="${y+35}" font-family="JetBrains Mono" font-size="9.5" fill="var(--red)" text-anchor="middle" font-weight="600" style="${halo}">I ${fmt(vi.currents.ia,1)} kA</text>`;
 
   /* bus = garis vertikal tebal (terhubung penuh, tanpa celah) */
   const bus=(x,label)=>`
@@ -961,6 +1097,11 @@ function renderSLD(m){
   lbl+=`<text x="${xA}" y="${y-half-9}" font-family="JetBrains Mono" font-size="10.5" fill="var(--ink)" text-anchor="middle" font-weight="700" style="${halo}">Bus A</text>`;
   lbl+=`<text x="${xB}" y="${y-half-9}" font-family="JetBrains Mono" font-size="10.5" fill="var(--ink)" text-anchor="middle" font-weight="700" style="${halo}">Bus B</text>`;
   lbl+=`<text x="${xC}" y="${y-half-9}" font-family="JetBrains Mono" font-size="10.5" fill="var(--ink)" text-anchor="middle" font-weight="700" style="${halo}">Bus C</text>`;
+  /* chip tegangan loop tiap bus (di atas garis, di bawah nama bus) */
+  if(vi) [xA,xB,xC].forEach((bx,i)=>{
+    const b=vi.buses[['A','B','C'][i]];
+    lbl+=`<text x="${bx}" y="${y-half-19}" font-family="JetBrains Mono" font-size="9.5" fill="var(--blue)" text-anchor="middle" font-weight="600" style="${halo}">${b.tag} ${Math.round(b.loopKv)} kV</text>`;
+  });
 
   /* kotak relay — klik = nyala/matikan (bisa >1 aktif); tanpa arah panah.
      R1 kanan A · R3 kiri B · R2 kanan B · R4 kiri C */
@@ -986,13 +1127,14 @@ function renderSLD(m){
     <line x1="${xB-10}" y1="${y+26.5}" x2="${xB+10}" y2="${y+26.5}" stroke="${gc1}" stroke-width="1.2"/>
     <line x1="${xB-10}" y1="${y+30}" x2="${xB+10}" y2="${y+30}" stroke="${gc1}" stroke-width="1.2"/>
   </g>`;
-  lbl+=`<text x="${xB+20}" y="${y+29}" font-family="JetBrains Mono" font-size="8.5" fill="${gi?'var(--blue)':'var(--line)'}" text-anchor="start" style="${halo}">Infeed ${gi?'on':'off'}</text>`;
+  const infeedLbl=`Infeed ${gi?'on':'off'}`+(vi&&gi?` · ${fmt(vi.currents.ib,1)} kA`:'');
+  lbl+=`<text x="${xB+20}" y="${y+29}" font-family="JetBrains Mono" font-size="8.5" fill="${gi?'var(--blue)':'var(--line)'}" text-anchor="start" style="${halo}">${infeedLbl}</text>`;
 
   const ftLabel=P.faultType==='3ph'?'3φ':P.faultType==='phph'?'φ-φ':'φ-G';
   /* label mengikuti mode gangguan: R → "Rf=..Ω", Z → "Zf=R+jX Ω" */
-  const zfLabel = P.rfMode==='Z'
+  const zfLabel = (P.rfMode==='Z'
     ? `${ftLabel} · Zf=${fmt(P.rf,0)}+j${fmt(P.xf,0)}Ω`
-    : `${ftLabel} · Rf=${fmt(P.rf,0)}Ω`;
+    : `${ftLabel} · Rf=${fmt(P.rf,0)}Ω`)+(vi?` · If ${fmt(vi.currents.ifK,1)} kA`:'');
   const flx=Math.max(70,Math.min(VBW-70,faultX));
   s+=`<g id="faultHandle" style="cursor:ew-resize;">
       <line x1="${faultX}" y1="${y-30}" x2="${faultX}" y2="${y+30}" stroke="var(--red)" stroke-width="2"/>
@@ -1261,6 +1403,26 @@ function render(){
   renderStaircase(m,decisions);
   updateReadout(m,decisions);
 }
+
+/* ---------- splash pembuka: swipe dari kiri-atas, teks, lalu keluar ke kanan-bawah ----------
+   Diputar sekali setiap buka file. Klik di mana saja = skip. Reduced-motion = langsung ke
+   halaman utama. Tanpa JS splash tetap tak terlihat (transform awal di luar kiri-atas). */
+(function(){
+  const sp=$('splash'), root=$('root');
+  if(!sp||!root) return;
+  let gone=false; const timers=[];
+  const skip=()=>{
+    if(gone) return; gone=true;
+    timers.forEach(t=>clearTimeout(t));
+    root.classList.add('ready');
+    if(typeof sp.remove==='function') sp.remove();
+  };
+  try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) return skip(); }catch(e){}
+  timers.push(setTimeout(()=>sp.classList.add('go'),20));
+  timers.push(setTimeout(()=>{ sp.classList.add('out'); root.classList.add('ready'); },1350));
+  timers.push(setTimeout(skip,1860));
+  sp.addEventListener('click',skip);
+})();
 
 /* ---------- init ---------- */
 buildRelayList();
