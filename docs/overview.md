@@ -10,7 +10,8 @@ Satu aplikasi browser mandiri dalam **satu file HTML**: `distance_relay_simulato
 (markup + CSS + satu blok `<script>` ≈ 1400 baris). Tidak ada build system, framework,
 package manager, atau backend. Ini simulator **edukasi bahasa Indonesia** untuk proteksi
 *distance relay*: memetakan karakteristik relay (Impedance/Reactance/Mho/Quadrilateral) di
-bidang R–X, plus SLD interaktif, tangga waktu–impedansi, dan kartu pembacaan hasil trip.
+bidang R–X, plus SLD interaktif dan kartu pembacaan hasil trip (detail relay terpilih atau
+sekuens trip seluruh relay).
 Satu-satunya dependensi eksternal: KaTeX + Google Fonts via CDN (opsional, core tetap jalan).
 
 **Loop inti:** semua kontrol menulis ke satu objek state `S` (param di `S.param`/`P`) →
@@ -33,6 +34,7 @@ Buka file langsung di browser (`file:///`), atau `python -m http.server` / `npx 
 | `tools/readout.test.js` | Tes kartu readout/status. Jalankan: `node tools/readout.test.js`. |
 | `tools/sld-v-i.test.js` | Tes model V/I + chip SLD. Jalankan: `node tools/sld-v-i.test.js`. |
 | `tools/flow-anim.test.js` | Tes revisi animasi aliran SLD (`flowSegments` + geometri panah). Jalankan: `node tools/flow-anim.test.js`. |
+| `tools/side-mode.test.js` | Tes pemangkasan layout & mode dua-mode kartu kanan (`tripSequence` + `P.sideMode`). Jalankan: `node tools/side-mode.test.js`. |
 | `design-plans/` | Arsip design plan; yang ada berlabel **OBSOLETE** — jangan dieksekusi. |
 
 ## Arsitektur isi file HTML (urut dalam `<script>`)
@@ -50,7 +52,7 @@ Buka file langsung di browser (`file:///`), atau `python -m http.server` / `npx 
    memakai **Z terukur** `zm`, bukan Z apparent). `relayFaultZ` memberi `{behind,z,zm,zlPrim,…}`.
 5. **`computeFaultCircuit(m)`** (tambahan baru) — lihat bagian "Model V/I" di bawah.
 6. **Renderer**: `renderPlane` (R–X + zoom/pan), `renderSLD` (diagram satu garis + chip V/I),
-   `renderStaircase` (waktu–impedansi), `updateReadout` (kartu status/ringkasan). Semua murni:
+   `updateReadout` (kartu kanan dua mode: detail relay terpilih / sekuens trip). Semua murni:
    `m` + keputusan → string SVG/HTML.
 7. **`render()`** master — satu-satunya entry point perubahan state.
 8. **Splash pembuka** (IIFE) + **kunci tinggi panel parameter** (ResizeObserver).
@@ -69,6 +71,12 @@ Buka file langsung di browser (`file:///`), atau `python -m http.server` / `npx 
   (bahasa manusia, angka kunci `<b>`) → tabel 3 grup berjudul (`Relay & karakteristik`,
   `Impedansi gangguan`, `Lokasi gangguan & jangkauan`); baris `Z apparent (primer)` hanya
   muncul jika ≠ Z asli; label reach `Reach zona 1/2/3`.
+- **Kartu kanan dua mode + batas bawah halaman (sesi ini)**: tombol `#sideModeGroup`
+  (`P.sideMode` default `'relay'`) — `Relay terpilih` = konten lama; `Sekuens trip` =
+  `tripSequence(m)` (relay enabled urut waktu→zona→id; non-trip disertakan dgn alasan,
+  kotak status menyorot trip pertama, formula & SIR dikosongkan). Kartu waktu–impedansi
+  (`#staircase`) dan kotak catatan `#typeNote` DIHAPUS — kolom kanan kini berakhir di dasar
+  `plane-row` (bawah kartu R–X), panel parameter ikut terkunci di situ.
 - **Scrollbar tipis**: `.params-panel` 6px, thumb pill rounded, track transparan
   (`scrollbar-width:thin` utk Firefox).
 - **Chip V & I di SLD**: tombol `#viToggle` (`P.showVI`, default true) mengontrol chip
@@ -121,10 +129,11 @@ dan arus loop gangguan per sumber + total dalam kA primer. Uji literalnya ada di
 node tools/readout.test.js   # 22 asersi kartu readout
 node tools/sld-v-i.test.js   # 14 asersi model V/I + chip SLD
 node tools/flow-anim.test.js # 17 asersi panah aliran (flowSegments + #sld)
+node tools/side-mode.test.js # 14 asersi mode dua-mode & pemangkasan layout
 ```
 
 Harness mengabaikan CSS & tidak punya hirarki DOM anak — teks status readout dibaca dari
-`els.zoneLabel`/`els.timeLabel`, bukan `els.statusBox`. Kedua file tes meng-hard-code nama
+`els.zoneLabel`/`els.timeLabel`, bukan `els.statusBox`. Semua file tes meng-hard-code nama
 file HTML; update jika file di-rename.
 
 ## Gaya bahasa & tone

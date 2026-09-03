@@ -100,10 +100,10 @@
 
   .plane-card,.side-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
   .side-card{display:flex;flex-direction:column;}
-  /* Kanvas diagram (SLD, R–X, tangga waktu) + semua teks di dalamnya: non-selectable.
+  /* Kanvas diagram (SLD, R–X) + semua teks di dalamnya: non-selectable.
      Tanpa ini klik-ganda / drag-pan / seret-handle-gangguan ikut menyeleksi teks label
      (highlight biru) — mengganggu baca diagram. */
-  #sld,#plane,#staircase, #sld *,#plane *,#staircase *{
+  #sld,#plane, #sld *,#plane *{
     -webkit-user-select:none;
     -moz-user-select:none;
     user-select:none;
@@ -132,7 +132,9 @@
   .formula-box{margin-top:6px;overflow-x:auto;padding:4px 0;}
   .sir-note{font-size:11px;margin-top:8px;padding:8px 10px;border-radius:7px;}
 
-  .note-box{font-size:12px;color:var(--ink-soft);background:var(--blue-soft);border-radius:8px;padding:10px 13px;margin-top:2px;}
+  /* pemilih mode kartu kanan: 'Relay terpilih' vs 'Sekuens trip' */
+  .side-switch{margin:0 0 12px;}
+  .readout .rline.dim{opacity:.55;}
 
   /* relay list */
   .relay-item{display:flex;align-items:center;gap:8px;padding:8px 9px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;background:var(--surface);cursor:pointer;transition:.12s;}
@@ -347,6 +349,10 @@
         </div>
 
         <div class="side-card">
+          <div class="btngroup side-switch" id="sideModeGroup">
+            <button data-v="relay" class="active">Relay terpilih</button>
+            <button data-v="seq">Sekuens trip</button>
+          </div>
           <div class="status" id="statusBox">
             <div class="zlabel" id="zoneLabel">—</div>
             <div class="tlabel" id="timeLabel">—</div>
@@ -356,13 +362,6 @@
           <div class="sir-note" id="sirNote"></div>
         </div>
       </div>
-
-      <div class="plane-card">
-        <div style="font-family:'Space Grotesk',sans-serif;font-size:12.5px;font-weight:600;margin-bottom:6px;">Karakteristik waktu–impedansi (time–distance) — relay terpilih</div>
-        <svg id="staircase" viewBox="0 0 640 170" width="100%" style="display:block;"></svg>
-      </div>
-
-      <div class="note-box" id="typeNote"></div>
     </div>
   </div>
 </div>
@@ -438,7 +437,8 @@ let S={
     loadNow:84, loadAngNow:30,
     showZones:true, showLoad:true,
     faultType:'3ph', pos:50, rf:0, rfMode:'R', xf:0, infeed:1, infeedOn:true, ctErr:0, ptErr:0,
-    showVI:true
+    showVI:true,
+    sideMode:'relay'   // kartu kanan: 'relay' = detail relay terpilih, 'seq' = urutan trip
   },
   relays:[
     defaultRelay('R1','Relay Bus A → Bus B','A','fwd','L1'),
@@ -472,6 +472,8 @@ function setupGroup(groupId,fn){
   }));
 }
 setupGroup('faultTypeGroup',v=>{P.faultType=v;});
+/* mode kartu kanan: 'relay' = detail relay terpilih; 'seq' = urutan trip seluruh relay */
+setupGroup('sideModeGroup',v=>{P.sideMode=v;});
 
 bindRange('l1','l1','',0); bindRange('l2','l2','',0);
 bindRange('pos','pos','',0); bindRange('rf','rf','',0); bindRange('xf','xf','',0);
@@ -753,6 +755,29 @@ function decideRelay(relay,m){
   /* relay memutus berdasarkan Z TERUKUR (dgn error CT/PT), bukan Z sebenarnya */
   for(const [n,zn,t] of order){ if(tripTest(relay,fz.zm,zn,zone,m)) return {zone:n,time:t}; }
   return {zone:0,time:null};
+}
+/* ---------- urutan trip seluruh relay (mode 'Sekuens trip', murni & diuji) ----------
+   Utk relay ENABLED: baris yang trip diurutkan waktu operasi naik → zona naik → id
+   (Zona 1 = seketika/0 s), lalu baris non-trip dgn alasan ('di belakang relay' bila
+   fault di belakang relay, selain itu 'di luar jangkauan'). Relay mati dikecualikan.
+   tools/side-mode.test.js memeriksa urutan & alasan pd skenario literal. */
+function tripSequence(m){
+  const rows=[];
+  S.relays.forEach(r=>{
+    if(!r.enabled) return;
+    const d=decideRelay(r,m);
+    const behind=relayFaultZ(r,m).behind;
+    rows.push({
+      id:r.id, name:r.name,
+      zone:d.zone, time:d.zone===1?0:d.time,
+      reason:d.zone===0 ? (behind?'di belakang relay':'di luar jangkauan') : null
+    });
+  });
+  const cmp=(a,b)=> (a.time-b.time) || (a.zone-b.zone) || (a.id<b.id?-1:1);
+  return {
+    trip: rows.filter(x=>x.zone>0).sort(cmp),
+    not:  rows.filter(x=>x.zone===0).sort((a,b)=> a.id<b.id?-1:1)
+  };
 }
 
 /* ---------- tegangan bus & arus gangguan (utk chip V/I di SLD) ----------
@@ -1268,58 +1293,45 @@ function renderSLD(m){
   }
 }
 
-/* ---------- staircase (relay terpilih) ---------- */
-function renderStaircase(m,decisions){
-  const svg=$('staircase');
-  const VBW=640,VBH=170, padL=60,padR=30,padT=16,padB=34;
-  const plotW=VBW-padL-padR, plotH=VBH-padT-padB;
-  const sel=S.relays.find(r=>r.id===S.selectedRelayId);
-  const zone=relayZones(sel,m);
-  const z1=mag(zone.zone1), z2=mag(zone.zone2), z3=mag(zone.zone3);
-  const maxZ=z3*1.25;
-  const sx=z=>padL+(z/maxZ)*plotW;
-  const maxT=Math.max(sel.t3*1.2,1.5);
-  const sy=t=>padT+plotH-(t/maxT)*plotH;
-  let s='';
-  s+=`<line x1="${padL}" y1="${padT+plotH}" x2="${padL+plotW}" y2="${padT+plotH}" stroke="var(--ink)" stroke-width="1.3"/>`;
-  s+=`<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT+plotH}" stroke="var(--ink)" stroke-width="1.3"/>`;
-  s+=`<text x="${padL+plotW/2}" y="${VBH-6}" font-family="JetBrains Mono" font-size="10" fill="var(--ink-soft)" text-anchor="middle">|Z| terukur (Ω sekunder)</text>`;
-  s+=`<text x="14" y="${padT+8}" font-family="JetBrains Mono" font-size="10" fill="var(--ink-soft)">t (s)</text>`;
-  const ZC={1:'var(--red)',2:'var(--copper)',3:'var(--blue)'};
-  const steps=[[0,z1,0.02,ZC[1],'Zone 1'],[z1,z2,sel.t2,ZC[2],'Zone 2'],[z2,z3,sel.t3,ZC[3],'Zone 3']];
-  steps.forEach(([a,b,t,color,label])=>{
-    const x1=sx(a), x2=sx(b), yv=sy(t), ybase=padT+plotH;
-    s+=`<rect x="${x1}" y="${yv}" width="${x2-x1}" height="${ybase-yv}" fill="${color}" fill-opacity="0.15" stroke="${color}" stroke-width="1.3"/>`;
-    s+=`<text x="${(x1+x2)/2}" y="${yv-6}" font-family="JetBrains Mono" font-size="9.5" fill="${color}" text-anchor="middle">${label} · ${t<0.1?'instant':fmt(t,2)+'s'}</text>`;
-  });
-  const fzRel=relayFaultZ(sel,m);
-  const fzMag = fzRel.behind ? maxZ*0.99 : Math.min(mag(fzRel.z),maxZ*0.99);
-  const fx=sx(fzMag);
-  const zoneColor = decisions[sel.id].zone===0?'var(--green)':ZC[decisions[sel.id].zone];
-  s+=`<line x1="${fx}" y1="${padT}" x2="${fx}" y2="${padT+plotH}" stroke="${zoneColor}" stroke-width="1.6" stroke-dasharray="4 3"/>`;
-  s+=`<circle cx="${fx}" cy="${padT+plotH}" r="5" fill="${zoneColor}"/>`;
-  /* marker Z terukur (error CT/PT) di tangga */
-  if(P.ctErr!==0||P.ptErr!==0){
-    const fzM = fzRel.behind ? maxZ*0.99 : Math.min(mag(fzRel.zm),maxZ*0.99);
-    const fxm=sx(fzM);
-    s+=`<line x1="${fxm}" y1="${padT}" x2="${fxm}" y2="${padT+plotH}" stroke="var(--copper)" stroke-width="1.4" stroke-dasharray="3 3"/>`;
-    s+=`<circle cx="${fxm}" cy="${padT+plotH}" r="4" fill="var(--copper)" stroke="var(--surface)" stroke-width="1.2"/>`;
-  }
-  svg.innerHTML=s;
-}
-
 /* ---------- readout ---------- */
-const typeNotes={
-  impedance:'Impedance: lingkaran penuh berpusat di origin — non-directional, butuh directional element terpisah.',
-  reactance:'Reactance: hanya sensitif terhadap X; toleran Rf tapi rentan overreach saat beban resistif besar.',
-  mho:'Mho: inherently directional, lingkaran melewati origin di sepanjang sudut RCA (τ). Makin besar Rf & infeed, makin mudah lolos zona.',
-  quadrilateral:'Quadrilateral: R-reach & X-reach independen; lebih toleran gangguan resistif dari mho.'
-};
+/* Mode 'Sekuens trip' (P.sideMode==='seq'): status menyorot relay trip PERTAMA,
+   readout = urutan trip seluruh relay enabled (dari tripSequence) + grup relay yang
+   tak trip (alasan). Formula & catatan SIR (detail relay terpilih) dikosongkan. */
+function updateSeqReadout(m){
+  const seq=tripSequence(m);
+  const zoneNames={1:'TRIP — ZONE 1',2:'TRIP — ZONE 2',3:'TRIP — ZONE 3'};
+  const ZC={0:'var(--green)',1:'var(--red)',2:'var(--copper)',3:'var(--blue)'};
+  const ZS={0:'var(--green-soft)',1:'var(--red-soft)',2:'var(--copper-soft)',3:'var(--blue-soft)'};
+  const first=seq.trip[0], z=first?first.zone:0;
+  $('statusBox').style.background=ZS[z];
+  $('zoneLabel').style.color=ZC[z];
+  $('timeLabel').style.color=ZC[z];
+  if(first){
+    $('zoneLabel').textContent=`${first.id}: ${zoneNames[z]}`;
+    $('timeLabel').textContent = z===1?'waktu operasi: seketika':`waktu operasi: ${fmt(first.time,2)} s`;
+  } else {
+    $('zoneLabel').textContent='TIDAK ADA TRIP';
+    $('timeLabel').textContent='tidak ada relay yang trip';
+  }
+  const tFmt=r=> r.zone===1?'seketika':`${fmt(r.time,2)} s`;
+  const rowsTrip=seq.trip.map((r,i)=>`
+      <div class="rline"><span>${i+1}. <b>${r.id}</b> · Zona ${r.zone}</span><span>${tFmt(r)}</span></div>`).join('');
+  const rowsNot=seq.not.map(r=>`
+      <div class="rline dim"><span><b>${r.id}</b> · ${r.name}</span><span>${r.reason}</span></div>`).join('');
+  $('readout').innerHTML=`
+    <div class="rgroup"><div class="rgroup-title">Urutan trip</div>
+      ${rowsTrip||'<div class="rline"><span>—</span><span>tidak ada relay trip</span></div>'}
+    </div>
+    ${rowsNot?`<div class="rgroup"><div class="rgroup-title">Tidak trip</div>${rowsNot}</div>`:''}`;
+  $('formulaOut').innerHTML='';
+  $('sirNote').textContent='';
+}
 function updateReadout(m,decisions){
   $('z1out').textContent=`Z1 = ${fmt(m.Z1p.R,2)} + j${fmt(m.Z1p.X,2)} Ω`;
   $('z2out').textContent=`Z2 = ${fmt(m.Z2p.R,2)} + j${fmt(m.Z2p.X,2)} Ω`;
   $('sirOut').innerHTML=`SIR = |Zs|/|Z1| = <b>${fmt(m.SIR,2)}</b>`;
   $('loadzOut').textContent=`Lensa beban ${fmt(m.loadzMin,1)}–${fmt(m.loadzNom,1)} Ω · titik sistem ${fmt(mag(m.zlNow),1)} Ω ∠${fmt(P.loadAngNow,0)}°`;
+  if(P.sideMode==='seq'){ updateSeqReadout(m); return; }
 
   const sel=S.relays.find(r=>r.id===S.selectedRelayId);
   const dec=decisions[sel.id];
@@ -1383,7 +1395,6 @@ function updateReadout(m,decisions){
   else if(m.SIR>2){ sirBox.style.background='var(--copper-soft)'; sirBox.style.color='var(--copper)'; sirBox.textContent='SIR sedang (2–4) — perhatikan jangkauan resistif ujung saluran jauh.'; }
   else { sirBox.style.background='var(--green-soft)'; sirBox.style.color='var(--green)'; sirBox.textContent='SIR rendah (<2) — kondisi baik, relay cukup sensitif thd gangguan resistif.'; }
 
-  $('typeNote').textContent=typeNotes[sel.charType];
 }
 
 /* ---------- zoom/pan (semantik jendela-data) ----------
@@ -1433,7 +1444,6 @@ function render(){
   S.relays.forEach(r=>decisions[r.id]=r.enabled?decideRelay(r,m):{zone:0,time:null});
   renderPlane(m,decisions);
   renderSLD(m);
-  renderStaircase(m,decisions);
   updateReadout(m,decisions);
 }
 
@@ -1462,8 +1472,9 @@ buildRelayList();
 render();
 
 /* ---------- kunci tinggi panel parameter = tinggi kolom kanan (SLD → RX diagram) ---------- */
-/* Panel parameter jadi satu section scroll-sendiri; tingginya mengikuti .main (SLD + RX
-   + staircase). Sinkron via ResizeObserver agar tetap pas saat resize/collapse/render.
+/* Panel parameter jadi satu section scroll-sendiri; tingginya mengikuti .main — kini
+   berakhir di dasar plane-row (kartu R–X + kartu kanan), jadi batas bawah scroll panel
+   = dasar diagram R–X. Sinkron via ResizeObserver agar tetap pas saat resize/collapse.
    Di layar sempit (≤920px) kunci dilepas — CSS `height:auto!important` mengesampingkan
    gaya inline, dan JS pun berhenti menulis tinggi. */
 (function(){
