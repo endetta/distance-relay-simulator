@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulator Distance Relay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<style>
+  :root{
+    --bg:#F1F3F0; --surface:#FFFFFF; --ink:#16233A; --ink-soft:#4A5568;
+    --blue:#1F4E8C; --blue-soft:#E7EEF6; --copper:#B5651D; --copper-soft:#F5E9DC;
+    --line:#D6DAD2; --red:#C0392B; --red-soft:#F8E4E1; --green:#2E7D46; --green-soft:#E3F1E7;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;font-size:14px;line-height:1.5;}
+  .wrap{max-width:1560px;margin:0 auto;padding:28px 22px 60px;}
+
+  .layout{display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start;}
+  @media(max-width:920px){.layout{grid-template-columns:1fr;}}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 15px;margin-bottom:14px;}
+  .card-h{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600;margin:0 0 12px;}
+  .card-h .dot{width:7px;height:7px;border-radius:50%;background:var(--copper);}
+  .card-h .chev{margin-left:auto;color:var(--ink-soft);font-size:11px;transition:transform .15s;}
+  .card.collapsed .card-b{display:none;}
+  .card.collapsed .chev{transform:rotate(-90deg);}
+
+  /* wadah parameter: satu parent section dgn scroll sendiri, tinggi dikunci
+     seukuran kolom kanan (SLD → RX diagram) oleh JS. Di layar sempit dilepas. */
+  .params-panel{display:flex;flex-direction:column;gap:14px;overflow-y:auto;scrollbar-gutter:stable;padding:2px 3px 2px 0;}
+  .params-panel .card{margin-bottom:0;}
+  .params-panel::-webkit-scrollbar{width:8px;}
+  .params-panel::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px;}
+  .params-panel::-webkit-scrollbar-thumb:hover{background:var(--blue-soft);}
+  @media(max-width:920px){.params-panel{height:auto!important;overflow:visible;scrollbar-gutter:auto;}}
+
+  .field{margin-bottom:11px;}
+  .field:last-child{margin-bottom:0;}
+  .field label{display:flex;justify-content:space-between;font-size:11.5px;color:var(--ink-soft);margin-bottom:4px;font-family:'JetBrains Mono',monospace;}
+  .field label b{color:var(--ink);font-weight:600;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;}
+  .zline{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--blue);background:var(--blue-soft);border-radius:6px;padding:3px 8px;margin:-4px 0 11px;}
+  input[type=number]{width:100%;padding:6px 7px;border:1px solid var(--line);border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ink);background:var(--bg);}
+  input[type=range]{width:100%;accent-color:var(--blue);}
+  .btngroup{display:flex;gap:6px;flex-wrap:wrap;}
+  .btngroup button{flex:1;min-width:60px;padding:7px 6px;border:1px solid var(--line);background:var(--surface);border-radius:7px;font-family:'Inter',sans-serif;font-size:11.5px;font-weight:500;color:var(--ink-soft);cursor:pointer;transition:.15s;}
+  .btngroup button.active{background:var(--blue);border-color:var(--blue);color:#fff;}
+  .btngroup button:hover:not(.active){border-color:var(--blue);color:var(--blue);}
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--ink-soft);margin-bottom:8px;}
+  .toggle-row:last-child{margin-bottom:0;}
+  .hint{font-size:10.5px;color:var(--ink-soft);margin-top:4px;line-height:1.5;}
+  .err-note{margin-top:12px;display:flex;flex-direction:column;gap:6px;}
+  .err-def{font-size:10.5px;color:var(--ink-soft);line-height:1.45;}
+  .err-def b{color:var(--ink);}
+  .err-row{display:flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:10px;border-radius:7px;padding:6px 8px;}
+  .err-row .tag{font-weight:600;white-space:nowrap;}
+  .err-row .eff{flex:1;text-align:center;color:var(--ink-soft);white-space:nowrap;}
+  .err-row .badge{font-weight:600;font-size:9px;letter-spacing:.04em;padding:2px 6px;border-radius:4px;color:#fff;white-space:nowrap;}
+  .err-row.under{background:var(--copper-soft);}
+  .err-row.under .tag{color:var(--copper);}
+  .err-row.under .badge{background:var(--copper);}
+  .err-row.over{background:var(--red-soft);}
+  .err-row.over .tag{color:var(--red);}
+  .err-row.over .badge{background:var(--red);}
+  .err-foot{font-size:10px;color:var(--ink-soft);font-family:'JetBrains Mono',monospace;line-height:1.45;}
+  #animateBtn{width:100%;padding:9px;border:none;border-radius:8px;background:var(--copper);color:#fff;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12.5px;cursor:pointer;}
+  #animateBtn.playing{background:var(--red);}
+  .mini-btn{padding:5px 9px;border:1px solid var(--line);background:var(--surface);border-radius:7px;font-size:11.5px;font-weight:500;color:var(--ink-soft);cursor:pointer;}
+  .mini-btn:hover{border-color:var(--blue);color:var(--blue);}
+  .topbar{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+  .topbar .tt{font-family:'Space Grotesk',sans-serif;font-size:12.5px;font-weight:600;margin-right:auto;line-height:1.2;}
+  .mini-btn.hl{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600;padding:6px 12px;}
+  .topbar .mini-btn.hl{padding:2px 10px;line-height:1.2;}
+  .mini-btn.hl:hover{background:#16385F;color:#fff;}
+  .mini-btn.on{border-color:var(--blue);background:var(--blue-soft);color:var(--blue);font-weight:600;}
+  .mini-btn.playing{background:var(--red);border-color:var(--red);color:#fff;font-weight:600;}
+
+  .main{display:flex;flex-direction:column;gap:16px;}
+  .sld-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px 8px;}
+
+  /* animasi aliran daya pada SLD — PANAH berjalan sepanjang saluran (animateMotion).
+     Arah panah = arah aliran daya (rotate:auto). Jarak antar-panah lega agar mudah
+     dibaca; begin negatif menyebarkan panah di sepanjang lintasan sejak frame pertama. */
+  .arr{fill:none;stroke-linecap:round;}
+  @keyframes scpulse{0%,100%{opacity:.18}50%{opacity:.5}}
+  .sc-pulse{animation:scpulse .8s ease-in-out infinite;}
+  .plane-row{display:grid;grid-template-columns:2.1fr 1fr;gap:16px;align-items:stretch;}
+  @media(max-width:920px){.plane-row{grid-template-columns:1fr;}}
+
+  .plane-card,.side-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
+  .side-card{display:flex;flex-direction:column;}
+  .toolbar{display:flex;gap:6px;align-items:center;margin-bottom:8px;}
+  .toolbar .sp{flex:1;}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:var(--ink-soft);margin-top:8px;font-family:'JetBrains Mono',monospace;}
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+  .legend i{width:10px;height:10px;border-radius:3px;display:inline-block;}
+
+  .status{border-radius:10px;padding:14px 15px;text-align:center;margin-bottom:12px;}
+  .status .zlabel{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;letter-spacing:-.01em;}
+  .status .tlabel{font-family:'JetBrains Mono',monospace;font-size:12px;margin-top:2px;}
+  .readout{flex:1;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ink);}
+  .readout .rline{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--line);}
+  .readout .rline:last-child{border-bottom:none;}
+  .readout .rline span:first-child{color:var(--ink-soft);}
+  .formula-box{margin-top:6px;overflow-x:auto;padding:4px 0;}
+  .sir-note{font-size:11px;margin-top:8px;padding:8px 10px;border-radius:7px;}
+
+  .note-box{font-size:12px;color:var(--ink-soft);background:var(--blue-soft);border-radius:8px;padding:10px 13px;margin-top:2px;}
+
+  /* relay list */
+  .relay-item{display:flex;align-items:center;gap:8px;padding:8px 9px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;background:var(--surface);cursor:pointer;transition:.12s;}
+  .relay-item:hover{border-color:var(--blue);}
+  .relay-item.sel{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue);}
+  .relay-item.off{opacity:.45;}
+  .relay-item .sw{width:9px;height:9px;border-radius:50%;flex:none;background:var(--green);}
+  .relay-item .nm{font-size:12px;flex:1;line-height:1.25;}
+  .relay-item .nm small{display:block;color:var(--ink-soft);font-size:10px;font-family:'JetBrains Mono',monospace;}
+  .relay-item .gear{flex:none;font-size:12px;padding:3px 7px;border-radius:6px;background:var(--blue-soft);color:var(--blue);font-family:'JetBrains Mono',monospace;}
+
+  /* modal */
+  .modal-bg{position:fixed;inset:0;background:rgba(22,35,58,.35);display:none;align-items:center;justify-content:center;z-index:50;padding:18px;}
+  .modal-bg.show{display:flex;}
+  .modal{background:#fff;border-radius:14px;padding:18px 20px;width:340px;max-width:100%;max-height:88vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.2);}
+  .modal h3{margin:0 0 4px;font-family:'Space Grotesk',sans-serif;font-size:15px;}
+  .modal .sub{font-size:11px;color:var(--ink-soft);font-family:'JetBrains Mono',monospace;margin-bottom:12px;}
+  .modal .close{float:right;cursor:pointer;color:var(--ink-soft);font-size:18px;line-height:1;}
+  .modal .foot{display:flex;justify-content:flex-end;margin-top:12px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <span class="tt">Simulator Distance Relay</span>
+    <button class="mini-btn hl" id="collapseAll">Ciutkan semua</button>
+    <button class="mini-btn hl" id="expandAll">Buka semua</button>
+  </div>
+
+  <div class="layout">
+    <!-- ===== SIDEBAR ===== -->
+    <div>
+      <div class="params-panel" id="paramsPanel">
+      <div class="card" data-card="line">
+        <div class="card-h"><span class="dot"></span>Parameter saluran<span class="chev">▾</span></div>
+        <div class="card-b">
+          <div class="field">
+            <label>Saluran 1 — panjang (km) <b id="l1v">100</b></label>
+            <input type="range" id="l1" min="10" max="250" step="5" value="100">
+          </div>
+          <div class="row2">
+            <div class="field"><label>r1 (Ω/km)</label><input type="number" id="r1" value="0.05" step="0.01" min="0.001"></div>
+            <div class="field"><label>x1 (Ω/km)</label><input type="number" id="x1" value="0.5" step="0.01" min="0.001"></div>
+          </div>
+          <div class="zline" id="z1out">Z1 = 5.00 + j50.00 Ω</div>
+          <div class="field">
+            <label>Saluran 2 — panjang (km) <b id="l2v">80</b></label>
+            <input type="range" id="l2" min="10" max="250" step="5" value="80">
+          </div>
+          <div class="row2">
+            <div class="field"><label>r2 (Ω/km)</label><input type="number" id="r2" value="0.05" step="0.01" min="0.001"></div>
+            <div class="field"><label>x2 (Ω/km)</label><input type="number" id="x2" value="0.5" step="0.01" min="0.001"></div>
+          </div>
+          <div class="zline" id="z2out">Z2 = 4.00 + j40.00 Ω</div>
+          <div class="row3">
+            <div class="field"><label>CTR</label><input type="number" id="ctr" value="80" step="1" min="1"></div>
+            <div class="field"><label>PTR</label><input type="number" id="ptr" value="1363.6" step="1" min="1"></div>
+            <div class="field"><label>Zs (Ω)</label><input type="number" id="zsmag" value="10" step="0.5" min="0"></div>
+          </div>
+          <div class="hint" id="sirOut">SIR = |Zs|/|Z1|</div>
+        </div>
+      </div>
+
+      <div class="card" data-card="load">
+        <div class="card-h"><span class="dot"></span>Beban &amp; zona beban<span class="chev">▾</span></div>
+        <div class="card-b">
+          <div class="row2">
+            <div class="field"><label>V saluran (kV)</label><input type="number" id="vLL_kV" value="150" step="1" min="1"></div>
+            <div class="field"><label>Beban maks (MVA)</label><input type="number" id="loadMVA" value="120" step="1" min="1"></div>
+          </div>
+          <div class="row2">
+            <div class="field"><label>Sudut beban (°)</label><input type="number" id="pfAngleDeg" value="30" step="1" min="0" max="60"></div>
+            <div class="field"><label>Margin blinder (°)</label><input type="number" id="loadEncroachDeg" value="5" step="1" min="0" max="30"></div>
+          </div>
+          <div class="row2">
+            <div class="field"><label>Beban saat normal (MVA)</label><input type="number" id="loadNow" value="84" step="1" min="0"></div>
+            <div class="field"><label>Sudut beban normal (°)</label><input type="number" id="loadAngNow" value="30" step="1" min="-60" max="60"></div>
+          </div>
+          <div class="zline" id="loadzOut">Z beban min ≈ — Ω</div>
+          <div class="toggle-row"><span>Tampilkan zona beban</span><input type="checkbox" id="showLoad" checked></div>
+          <div class="toggle-row"><span>Tampilkan Zone 1/2/3</span><input type="checkbox" id="showZones" checked></div>
+        </div>
+      </div>
+
+      <div class="card" data-card="fault">
+        <div class="card-h"><span class="dot"></span>Parameter gangguan<span class="chev">▾</span></div>
+        <div class="card-b">
+          <div class="btngroup" id="faultTypeGroup">
+            <button data-v="3ph" class="active">3-fasa</button>
+            <button data-v="phph">Fasa-fasa</button>
+            <button data-v="phg">Fasa-tanah</button>
+          </div>
+          <div class="field" style="margin-top:12px;">
+            <label>Lokasi gangguan (km dari sumber) <b id="posv">50</b></label>
+            <input type="range" id="pos" min="0" max="180" step="1" value="50">
+          </div>
+          <div class="btngroup" id="rfModeGroup" style="margin-top:12px;">
+            <button data-v="R" class="active">R murni</button>
+            <button data-v="Z">Z = R + jX</button>
+          </div>
+          <div class="field" style="margin-top:10px;">
+            <label>Resistansi gangguan Rf (Ω, primer) <b id="rfv">0</b></label>
+            <input type="range" id="rf" min="0" max="80" step="1" value="0">
+          </div>
+          <div class="field" id="xfField" style="display:none;">
+            <label>Reaktansi gangguan Xf (Ω, primer) <b id="xfv">0</b></label>
+            <input type="range" id="xf" min="-40" max="40" step="1" value="0">
+          </div>
+          <div class="field">
+            <label>Faktor infeed remote <b id="infeedv">1.0×</b></label>
+            <input type="range" id="infeed" min="1" max="4" step="0.1" value="1">
+            <div class="toggle-row"><span>Infeed aktif (sumber di Bus B)</span><input type="checkbox" id="infeedOn" checked></div>
+          </div>
+          <div class="field" style="margin-top:12px;">
+            <label>Error CT <b id="ctErrv">0%</b></label>
+            <input type="range" id="ctErr" min="-10" max="10" step="0.5" value="0">
+            <label style="margin-top:8px;">Error PT/CVT <b id="ptErrv">0%</b></label>
+            <input type="range" id="ptErr" min="-10" max="10" step="0.5" value="0">
+          </div>
+          <div class="err-note">
+            <div class="err-def">Error positif = sinyal sekunder <b>kurang</b> — kondisi khas saat gangguan.</div>
+            <div class="err-row under"><span class="tag">CT saturasi</span><span class="eff">I↓ → |Z| ↑</span><span class="badge">UNDERREACH</span></div>
+            <div class="err-row over"><span class="tag">CVT transient</span><span class="eff">V↓ → |Z| ↓</span><span class="badge">OVERREACH</span></div>
+            <div class="err-foot">Makanya Zone 1 tak pernah 100% — sisanya margin utk error + infeed.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" data-card="relays">
+        <div class="card-h"><span class="dot"></span>Relay<span class="chev">▾</span></div>
+        <div class="card-b" id="relayList"></div>
+      </div>
+
+      <button id="animateBtn">▶ Animasikan sapuan gangguan</button>
+      </div>
+    </div>
+
+    <!-- ===== MAIN ===== -->
+    <div class="main">
+
+      <div class="sld-card">
+        <svg id="sld" viewBox="0 0 980 124" width="100%" style="display:block;cursor:pointer;"></svg>
+      </div>
+
+      <div class="plane-row">
+        <div class="plane-card">
+          <div class="toolbar">
+            <button class="mini-btn" id="zoomOut">−</button>
+            <button class="mini-btn" id="zoomIn">+</button>
+            <span class="sp"></span>
+            <button class="mini-btn" id="zoomReset">Fit / Reset</button>
+          </div>
+          <svg id="plane" viewBox="0 0 640 470" width="100%" style="display:block;cursor:grab;"></svg>
+          <div class="legend" id="legend"></div>
+        </div>
+
+        <div class="side-card">
+          <div class="status" id="statusBox">
+            <div class="zlabel" id="zoneLabel">—</div>
+            <div class="tlabel" id="timeLabel">—</div>
+          </div>
+          <div class="readout" id="readout"></div>
+          <div class="formula-box" id="formulaOut"></div>
+          <div class="sir-note" id="sirNote"></div>
+        </div>
+      </div>
+
+      <div class="plane-card">
+        <div style="font-family:'Space Grotesk',sans-serif;font-size:12.5px;font-weight:600;margin-bottom:6px;">Karakteristik waktu–impedansi (time–distance) — relay terpilih</div>
+        <svg id="staircase" viewBox="0 0 640 170" width="100%" style="display:block;"></svg>
+      </div>
+
+      <div class="note-box" id="typeNote"></div>
+    </div>
+  </div>
+</div>
+
+<!-- modal pengaturan relay -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal" id="modal">
+    <span class="close" id="modalClose">✕</span>
+    <h3 id="modalTitle">Relay</h3>
+    <div class="sub" id="modalSub"></div>
+    <div class="card-b">
+      <div class="field"><label>Karakteristik relay</label></div>
+      <div class="btngroup" id="mChar">
+        <button data-v="impedance">Impedance</button>
+        <button data-v="reactance">Reactance</button>
+        <button data-v="mho">Mho</button>
+        <button data-v="quadrilateral">Quad</button>
+      </div>
+      <div class="field" style="margin-top:12px;">
+        <label>RCA offset — Mho (°) <b id="mrcav">0</b></label>
+        <input type="range" id="mrca" min="-30" max="30" step="1" value="0">
+      </div>
+      <div class="field">
+        <label>R-reach = ×X-reach — Quad <b id="mqrmv">1.5×</b></label>
+        <input type="range" id="mqrm" min="0.5" max="4" step="0.1" value="1.5">
+      </div>
+      <div class="row2">
+        <div class="field"><label>Zone 1 reach (%)</label><input type="number" id="mz1" value="80" step="1" min="10"></div>
+        <div class="field"><label>Zone 2 reach (%)</label><input type="number" id="mz2" value="50" step="1" min="10"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Z3 sal. samping (%)</label><input type="number" id="mz3a" value="100" step="1" min="0"></div>
+        <div class="field"><label>Z3 sal. lanjut (%)</label><input type="number" id="mz3b" value="20" step="1" min="0"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>t Zone 2 (s)</label><input type="number" id="mt2" value="0.4" step="0.1" min="0.1"></div>
+        <div class="field"><label>t Zone 3 (s)</label><input type="number" id="mt3" value="1.2" step="0.1" min="0.2"></div>
+      </div>
+    </div>
+    <div class="foot"><button class="mini-btn" id="modalClose2">Tutup</button></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script>
+/* ---------- complex helpers ---------- */
+const C=(r,x)=>({R:r,X:x});
+const add=(a,b)=>C(a.R+b.R,a.X+b.X);
+const sub=(a,b)=>C(a.R-b.R,a.X-b.X);
+const scl=(a,k)=>C(a.R*k,a.X*k);
+const mag=a=>Math.hypot(a.R,a.X);
+const ang=a=>Math.atan2(a.X,a.R);
+const fromPolar=(m,th)=>C(m*Math.cos(th),m*Math.sin(th));
+const deg=r=>r*180/Math.PI, rad=d=>d*Math.PI/180;
+const fmt=(n,d=2)=>Number(n).toFixed(d);
+/* display transform: rev relay diputar 180° (×−1 pada R dan X) agar zonanya tampak di kuadran kiri */
+const dz=(z,dir)=> dir==='rev' ? C(-z.R,-z.X) : z;
+
+/* ---------- state ---------- */
+const defaultRelay=(id,name,bus,direction,lineRef)=>({
+  id,name,bus,direction,lineRef,
+  enabled:true,
+  charType:'mho', rcaOffset:0, qrm:1.5,
+  z1Reach:0.8, z2Reach:0.5, z3AdjLine:1.0, z3NextLine:0.2,
+  t2:0.4, t3:1.2
+});
+let S={
+  param:{
+    l1:100,r1:0.05,x1:0.5, l2:80,r2:0.05,x2:0.5,
+    ctr:80,ptr:1363.6, zsmag:10,
+    vLL_kV:150, loadMVA:120, pfAngleDeg:30, loadEncroachDeg:5,
+    loadNow:84, loadAngNow:30,
+    showZones:true, showLoad:true,
+    faultType:'3ph', pos:50, rf:0, rfMode:'R', xf:0, infeed:1, infeedOn:true, ctErr:0, ptErr:0
+  },
+  relays:[
+    defaultRelay('R1','Relay Bus A → Bus B','A','fwd','L1'),
+    defaultRelay('R2','Relay Bus B → Bus C','B','fwd','L2'),
+    defaultRelay('R3','Relay Bus B → Bus A','B','rev','L1'),
+    defaultRelay('R4','Relay Bus C → Bus B','C','rev','L2')
+  ],
+  selectedRelayId:'R1',
+  ui:{ view:{k:1,cx:0,cy:0}, collapsed:{} }
+};
+const P=S.param;
+let animTimer=null;
+
+/* ---------- DOM ---------- */
+const $=id=>document.getElementById(id);
+function bindRange(id,key,suffix,dec){
+  const el=$(id), out=$(id+'v');
+  el.addEventListener('input',()=>{
+    const v=parseFloat(el.value);
+    if(Number.isNaN(v)){ if(el.tagName==='INPUT'&&el.type==='number'){el.value=P[key];} return; } // input kosong/invalid: abaikan, jangan rusak state
+    P[key]=v;
+    if(out) out.textContent=fmt(P[key],dec===undefined?0:dec)+(suffix||'');
+    onParamChange();
+  });
+}
+function setupGroup(groupId,fn){
+  const btns=$(groupId).querySelectorAll('button');
+  btns.forEach(b=>b.addEventListener('click',()=>{
+    btns.forEach(x=>x.classList.remove('active'));
+    b.classList.add('active'); fn(b.dataset.v); render();
+  }));
+}
+setupGroup('faultTypeGroup',v=>{P.faultType=v;});
+
+bindRange('l1','l1','',0); bindRange('l2','l2','',0);
+bindRange('pos','pos','',0); bindRange('rf','rf','',0); bindRange('xf','xf','',0);
+/* mode impedansi gangguan: 'R' resistif (Xf disembunyikan), 'Z' kompleks (slider Xf tampil) */
+setupGroup('rfModeGroup',v=>{
+  P.rfMode=v;
+  $('xfField').style.display = v==='Z' ? '' : 'none';
+});
+bindRange('infeed','infeed','×',1);
+bindRange('ctErr','ctErr','%',1); bindRange('ptErr','ptErr','%',1);
+$('infeedOn').addEventListener('change',()=>{P.infeedOn=$('infeedOn').checked;render();});
+bindRange('loadMVA','loadMVA','',0);
+bindRange('pfAngleDeg','pfAngleDeg','',0);
+bindRange('loadEncroachDeg','loadEncroachDeg','',0);
+bindRange('vLL_kV','vLL_kV','',0);
+['r1','x1','r2','x2','loadNow','loadAngNow','ctr','ptr','zsmag'].forEach(id=>{
+  $(id).addEventListener('input',()=>{
+    const v=parseFloat($(id).value);
+    if(Number.isNaN(v)){ $(id).value=P[id]; return; } // input kosong/invalid: kembalikan nilai lama
+    P[id]=v; onParamChange();
+  });
+});
+$('showZones').addEventListener('change',()=>{P.showZones=$('showZones').checked;render();});
+$('showLoad').addEventListener('change',()=>{P.showLoad=$('showLoad').checked;render();});
+
+$('animateBtn').addEventListener('click',()=>{
+  const btn=$('animateBtn');
+  if(animTimer){ clearInterval(animTimer); animTimer=null; btn.textContent='▶ Animasikan sapuan gangguan'; btn.classList.remove('playing'); return; }
+  btn.textContent='⏸ Hentikan animasi'; btn.classList.add('playing');
+  let t=0;
+  animTimer=setInterval(()=>{
+    t+=2; const maxPos=P.l1+P.l2;
+    const p=(Math.sin(t*0.04)*0.5+0.5)*maxPos;
+    P.pos=p; $('pos').value=p; $('posv').textContent=fmt(p,0); render();
+  },40);
+});
+
+/* ---------- aliran daya pada SLD ---------- */
+/* Animasi aliran SELALU tampil (tanpa tombol): dash biru = arus beban, dash merah =
+   arus gangguan Sumber→titik gangguan, dash copper = kontribusi infeed Bus B→gangguan
+   (hanya saat infeed nyala). Digambar renderSLD setiap render — mengikuti posisi fault. */
+function onParamChange(){
+  const maxPos=P.l1+P.l2; $('pos').max=maxPos;
+  if(P.pos>maxPos){P.pos=maxPos;$('pos').value=maxPos;$('posv').textContent=fmt(maxPos,0);}
+  render();
+}
+
+/* ---------- relay list + selection + toggle ---------- */
+function buildRelayList(){
+  const box=$('relayList'); box.innerHTML='';
+  S.relays.forEach(r=>{
+    const div=document.createElement('div');
+    div.className='relay-item'+(r.id===S.selectedRelayId?' sel':'')+(r.enabled?'':' off');
+    div.dataset.rel=r.id;
+    div.innerHTML=`<span class="sw"></span><span class="nm">${r.name}<small>${r.bus} · ${r.direction==='fwd'?'→':'←'} ${r.charType}</small></span><span class="gear">⚙</span>`;
+    div.addEventListener('click',e=>{
+      if(e.target.classList.contains('gear')){ openModal(r); }
+      else { S.selectedRelayId=r.id; document.querySelectorAll('.relay-item').forEach(x=>x.classList.toggle('sel',x.dataset.rel===r.id)); render(); }
+    });
+    const sw=div.querySelector('.sw');
+    sw.title='Klik untuk nyala/matikan';
+    sw.addEventListener('click',e=>{ e.stopPropagation(); r.enabled=!r.enabled; div.classList.toggle('off',!r.enabled); render(); });
+    box.appendChild(div);
+  });
+}
+function refreshRelayList(){
+  document.querySelectorAll('.relay-item').forEach(d=>{
+    const r=S.relays.find(x=>x.id===d.dataset.rel);
+    d.classList.toggle('sel',r.id===S.selectedRelayId);
+    d.classList.toggle('off',!r.enabled);
+    d.querySelector('.nm small').textContent=`${r.bus} · ${r.direction==='fwd'?'→':'←'} ${r.charType}`;
+  });
+}
+
+/* ---------- modal ---------- */
+let modalRelay=null;
+function openModal(r){
+  modalRelay=r;
+  $('modalTitle').textContent=r.name;
+  $('modalSub').textContent=`${r.bus} · arah ${r.direction==='fwd'?'maju (→)':'mundur (←)'} · saluran ${r.lineRef}`;
+  $('mrca').value=r.rcaOffset; $('mrcav').textContent=fmt(r.rcaOffset,0);
+  $('mqrm').value=r.qrm; $('mqrmv').textContent=fmt(r.qrm,1)+'×';
+  $('mz1').value=Math.round(r.z1Reach*100);
+  $('mz2').value=Math.round(r.z2Reach*100);
+  $('mz3a').value=Math.round(r.z3AdjLine*100);
+  $('mz3b').value=Math.round(r.z3NextLine*100);
+  $('mt2').value=r.t2; $('mt3').value=r.t3;
+  document.querySelectorAll('#mChar button').forEach(b=>b.classList.toggle('active',b.dataset.v===r.charType));
+  $('modalBg').classList.add('show');
+}
+function closeModal(){ $('modalBg').classList.remove('show'); modalRelay=null; }
+$('modalClose').addEventListener('click',closeModal);
+$('modalClose2').addEventListener('click',closeModal);
+$('modalBg').addEventListener('click',e=>{ if(e.target===$('modalBg')) closeModal(); });
+document.querySelectorAll('#mChar button').forEach(b=>b.addEventListener('click',()=>{
+  if(!modalRelay)return;
+  document.querySelectorAll('#mChar button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); modalRelay.charType=b.dataset.v; refreshRelayList(); render();
+}));
+$('mrca').addEventListener('input',()=>{ if(!modalRelay)return; modalRelay.rcaOffset=parseFloat($('mrca').value); $('mrcav').textContent=fmt(modalRelay.rcaOffset,0); render(); });
+$('mqrm').addEventListener('input',()=>{ if(!modalRelay)return; modalRelay.qrm=parseFloat($('mqrm').value); $('mqrmv').textContent=fmt(modalRelay.qrm,1)+'×'; render(); });
+const modalRaw=id=>({'mz1':modalRelay.z1Reach,'mz2':modalRelay.z2Reach,'mz3a':modalRelay.z3AdjLine,'mz3b':modalRelay.z3NextLine,'mt2':modalRelay.t2,'mt3':modalRelay.t3}[id]);
+['mz1','mz2','mz3a','mz3b','mt2','mt3'].forEach(id=>{
+  $(id).addEventListener('input',()=>{ if(!modalRelay)return;
+    const v=parseFloat($(id).value);
+    if(Number.isNaN(v)){ $(id).value=(id.startsWith('mz')?Math.round(modalRaw(id)*100):modalRaw(id)); return; }
+    if(id==='mz1')modalRelay.z1Reach=v/100;
+    if(id==='mz2')modalRelay.z2Reach=v/100;
+    if(id==='mz3a')modalRelay.z3AdjLine=v/100;
+    if(id==='mz3b')modalRelay.z3NextLine=v/100;
+    if(id==='mt2')modalRelay.t2=v;
+    if(id==='mt3')modalRelay.t3=v;
+    render();
+  });
+});
+
+/* ---------- collapse ---------- */
+function setCollapsed(card,state){
+  S.ui.collapsed[card]=state;
+  document.querySelector(`.card[data-card="${card}"]`).classList.toggle('collapsed',state);
+}
+document.querySelectorAll('.card-h').forEach(h=>{
+  h.addEventListener('click',()=>{
+    const card=h.parentElement.dataset.card;
+    setCollapsed(card,!S.ui.collapsed[card]);
+  });
+});
+$('collapseAll').addEventListener('click',()=>document.querySelectorAll('.card[data-card]').forEach(c=>setCollapsed(c.dataset.card,true)));
+$('expandAll').addEventListener('click',()=>document.querySelectorAll('.card[data-card]').forEach(c=>setCollapsed(c.dataset.card,false)));
+
+/* ---------- core electrical model ---------- */
+function computeModel(){
+  const Z1p=C(P.r1*P.l1, P.x1*P.l1);
+  const Z2p=C(P.r2*P.l2, P.x2*P.l2);
+  const conv=P.ctr/P.ptr;
+  const Z1=scl(Z1p,conv), Z2=scl(Z2p,conv);
+  const lineAngle=ang(Z1);
+  let ZtoFaultP;
+  if(P.pos<=P.l1){ ZtoFaultP=scl(Z1p,P.pos/Math.max(P.l1,0.001)); }
+  else{ ZtoFaultP=add(Z1p, scl(Z2p,(P.pos-P.l1)/Math.max(P.l2,0.001))); }
+  /* Mode gangguan 'R' (resistif) vs 'Z' (kompleks Rf+jXf); keduanya dikuatkan infeed. */
+  const iffeed = P.infeedOn ? P.infeed : 1;   // infeed off ⇒ tanpa penguatan sumber remote
+  const xshift = P.rfMode==='Z' ? P.xf*iffeed : 0;
+  const ZapparentP=C(ZtoFaultP.R+P.rf*iffeed, ZtoFaultP.X+xshift);
+  const ZapparentS=scl(ZapparentP,conv);
+  /* Error CT/PT menggeser Z TERUKUR: Z_meas = V_meas/I_meas = Z_true·(1−PTerr)/(1−CTerr).
+     Konvensi slider: error positif = trafo MENGURANGI sinyal sekunder — kondisi khas saat
+     gangguan. CT saturasi ⇒ I terukur turun ⇒ |Z| terukur MEMBESAR (underreach);
+     CVT transient ⇒ V terukur turun ⇒ |Z| terukur MENGECIL (overreach). */
+  const errFrac=(1-P.ptErr/100)/(1-P.ctErr/100);
+  const ZmeasP=scl(ZapparentP,errFrac), ZmeasS=scl(ZapparentS,errFrac);
+  /* Z beban minimum (PRC-023): 0.85 pu tegangan, sudut beban → Z = 0.85·V²/S (3-fasa),
+     dikonversi ke Ω sekunder agar konsisten dengan bidang R-X & zona relay */
+  const Vv=P.vLL_kV*1000, Sv=P.loadMVA*1e6;
+  const loadzMin=0.85*(Vv*Vv)/Sv*conv;
+  /* Lensa beban: batas dalam = |Z| beban MAKSIMUM @0.85 pu V (kriteria loadability),
+     batas luar = |Z| beban 20% S maks (sistem ringan). Titik operasi pra-gangguan:
+     beban aktual loadNow @ tegangan normal 1.0 pu — "di mana sistem berada" saat sehat. */
+  const loadzNom=loadzMin*5;
+  const zlNowMag=(Vv*Vv)/(Math.max(P.loadNow,1)*1e6)*conv;
+  const thNow=rad(P.loadAngNow);
+  const zlNow=C(zlNowMag*Math.cos(thNow), zlNowMag*Math.sin(thNow));
+  const SIR=P.zsmag/Math.max(mag(Z1p),0.001);
+  return {Z1p,Z2p,Z1,Z2,lineAngle,ZapparentP,ZapparentS,ZmeasP,ZmeasS,conv,loadzMin,loadzNom,zlNow,SIR};
+}
+
+/* zona tiap relay (frame standar, R≥0). Dipakai untuk TES trip maupun DASAR gambar. */
+function relayZones(relay,m){
+  const Zline=relay.lineRef==='L1'?m.Z1:m.Z2;
+  const opp=relay.lineRef==='L1'?m.Z2:m.Z1;
+  const zone1=scl(Zline,relay.z1Reach);
+  const zone2=add(Zline,scl(opp,relay.z2Reach));
+  const zone3=add(add(Zline,opp),scl(opp,relay.z3AdjLine+relay.z3NextLine-1));
+  return {zone1,zone2,zone3};
+}
+function forwardOK(z,theta){ return z.R*Math.cos(theta)+z.X*Math.sin(theta) >= 0; }
+
+/* ---------- MODUL KARAKTERISTIK (satu sumber geometri zona) ----------
+   charShape(relay, zn, zones, m) -> {kind:'circle', c, r} | {kind:'rect', c1, c2}
+   pointIn(shape, z)              -> titik di dalam bentuk (frame maju relay)
+   shapeBounds(shape)             -> {minR,maxR,minX,maxX} utk bounding-box plot.
+   Ketiganya dipakai tripTest, grow() renderPlane, dan shapeSVG — konstanta bentuk
+   (blinder 1.3, pusat mho reach/2, R-reach qrm) ditulis SEKALI di sini. Sudut mho
+   mengikuti lineRef relay (L1 -> m.lineAngle, L2 -> ang(m.Z2)) + RCA. */
+function charShape(relay, zn, zones, m){
+  const th=(relay.lineRef==='L1'?m.lineAngle:ang(m.Z2)) + (relay.rcaOffset||0)*Math.PI/180;
+  const reach=mag(zn);
+  if(relay.charType==='impedance') return {kind:'circle', c:C(0,0), r:reach, dir:th}; // non-directional shape -> butuh cek arah
+  if(relay.charType==='mho')       return {kind:'circle', c:fromPolar(reach/2,th), r:reach/2};
+  if(relay.charType==='reactance'){
+    const rMaxB=mag(zones.zone3)*1.3;
+    return {kind:'rect', c1:C(-0.1*rMaxB,0), c2:C(rMaxB,zn.X)};
+  }
+  return {kind:'rect', c1:C(0,0), c2:C(zn.X*relay.qrm, zn.X)}; // quadrilateral
+}
+function pointIn(shape,z){
+  if(shape.kind==='circle'){
+    if(!(mag(sub(z,shape.c))<=shape.r)) return false;
+    return shape.dir===undefined || forwardOK(z,shape.dir); // impedance: lingkaran + setengah bidang maju
+  }
+  return z.R>=shape.c1.R && z.R<=shape.c2.R && z.X>=shape.c1.X && z.X<=shape.c2.X;
+}
+function shapeBounds(shape){
+  if(shape.kind==='circle') return {minR:shape.c.R-shape.r, maxR:shape.c.R+shape.r, minX:shape.c.X-shape.r, maxX:shape.c.X+shape.r};
+  return {minR:shape.c1.R, maxR:shape.c2.R, minX:shape.c1.X, maxX:shape.c2.X};
+}
+
+/* trip test: z = Z apparent dalam frame maju relay (rev sudah dirotasi 180° oleh decideRelay),
+   zn = zona yang diuji (satu complex); zones = kumpulan zona relay (utk blinder reactance);
+   m = model (sudut saluran per lineRef diambil modul karakteristik).
+   Geometri bentuk dari charShape() — satu sumber; tes titik dari pointIn(). */
+function tripTest(relay,z,zn,zones,m){
+  return pointIn(charShape(relay,zn,zones,m), z);
+}
+/* Impedansi gangguan TERUKUR pada sisi relay (bukan frame sumber di Bus A):
+   menempatkan titik gangguan relatif thd bus relay & arah hadapnya. Fault di belakang
+   relay -> {behind:true} (tidak boleh trip). Rf/infeed menggeser komponen resistif.
+   Semua dalam Ω sekunder agar sebanding dengan zona relay. */
+function relayFaultZ(relay,m){
+  const pos=P.pos, L1=P.l1, L2=P.l2, conv=m.conv;
+  const seg=(d,r,x)=>scl(C(r,x),Math.max(d,0));
+  let zlineP=null, behind=false;
+  if(relay.bus==='A'){                 // menghadap + : melewati L1 lalu L2
+    zlineP=add(seg(Math.min(pos,L1),P.r1,P.x1), seg(pos-L1,P.r2,P.x2)); behind=pos<0;
+  } else if(relay.bus==='B'){
+    if(relay.direction==='fwd'){ const d=pos-L1; behind=d<0; zlineP=behind?scl(seg(L1-pos,P.r1,P.x1),-1):seg(d,P.r2,P.x2); } // B->C: L2
+    else { const d=L1-pos; behind=d<0; zlineP=behind?scl(seg(pos-L1,P.r2,P.x2),-1):seg(d,P.r1,P.x1); }                        // B->A: L1
+  } else {                             // Bus C, menghadap kiri ke B
+    const d=(L1+L2)-pos; behind=d<0;
+    // fault di L2: sebagian L2; fault di L1: L2 penuh + sebagian L1 (jalur C→B→fault)
+    zlineP = behind ? scl(seg(d,P.r2,P.x2),-1)
+           : pos>=L1 ? seg(d,P.r2,P.x2)
+                     : add(seg(L2,P.r2,P.x2), seg(pos,P.r1,P.x1));
+  }
+  /* fault di belakang relay: relay tetap MENGUKUR Z (terbalik, tanpa geseran Rf) —
+     geometri karakteristik yang menolaknya; disimpan utk tampilan/readout */
+  const iffeed = P.infeedOn ? P.infeed : 1;               // infeed off ⇒ kontribusi remote = 0 (faktor 1)
+  /* Dua mode impedansi gangguan:
+     - rfMode 'R': murni resistif (historis) — hanya Rf, X terukur tak berubah.
+     - rfMode 'Z': Zf = Rf + jXf — reaktansi gangguan Xf ikut menggeser X (naik/turun). */
+  const xshift = P.rfMode==='Z' ? P.xf*iffeed : 0;        // kontribusi reaktansi gangguan (Xf·infeed)
+  const zfP = behind ? zlineP : C(zlineP.R + P.rf*iffeed, zlineP.X + xshift);   // Z apparent, Ω primer
+  const zSec=scl(zfP,conv);                                // Ω sekunder
+  /* Z TERUKUR oleh relay dgn error CT/PT: Z_meas = Z_true·(1−PTerr)/(1−CTerr)
+     (error positif = sinyal sekunder kurang: CT saturasi ⇒ underreach, CVT ⇒ overreach) */
+  const errFrac=(1-P.ptErr/100)/(1-P.ctErr/100);
+  /* Z ASLI = impedansi saluran MURNI ke titik gangguan (tanpa Rf/infeed, tanpa error).
+     Inilah posisi gangguan sebenarnya — berada DI ATAS ray arah saluran. */
+  const zlPrim=zlineP, zl=scl(zlineP,conv);
+  return {behind, z:zSec, zPrim:zfP, zm:scl(zSec,errFrac), zmPrim:scl(zfP,errFrac), zl, zlPrim};
+}
+/* Origin (bus) tiap relay pada bidang impedansi global (basis Bus A = 0):
+   R1 di A(0), R2 & R3 di ujung saluran 1 (Z1 = Bus B), R4 di ujung saluran 2 (Z1+Z2 = Bus C). */
+function relayOrigin(relay,m){
+  if(relay.bus==='A') return C(0,0);
+  if(relay.bus==='B') return m.Z1;
+  return add(m.Z1,m.Z2);
+}
+/* Mapping koordinat frame relay -> bidang global.
+   fwd: zona membentang menjauh dari bus (+arah saluran). rev: membentang kebalikannya
+   (point-reflection thd origin bus) sehingga R3 di Bus B menghadap kiri-bawah. */
+const gz=(relay,z,m)=> relay.direction==='fwd' ? add(relayOrigin(relay,m), z) : sub(relayOrigin(relay,m), z);
+function decideRelay(relay,m){
+  const zone=relayZones(relay,m);
+  const fz=relayFaultZ(relay,m);
+  if(fz.behind) return {zone:0,time:null};
+  const order=[[1,zone.zone1,0],[2,zone.zone2,relay.t2],[3,zone.zone3,relay.t3]];
+  /* relay memutus berdasarkan Z TERUKUR (dgn error CT/PT), bukan Z sebenarnya */
+  for(const [n,zn,t] of order){ if(tripTest(relay,fz.zm,zn,zone,m)) return {zone:n,time:t}; }
+  return {zone:0,time:null};
+}
+
+/* ---------- R-X plane (fit + zoom/pan + semua relay, koordinat global) ---------- */
+function renderPlane(m,decisions){
+  const svg=$('plane');
+  const VBW=640,VBH=470,padL=38,padR=12,padT=10,padB=26;
+  const plotW=VBW-padL-padR, plotH=VBH-padT-padB;
+  const view=S.ui.view;
+
+  /* batas data = union bentuk zona (global, via gz) + titik gangguan semua relay nyala.
+     Zona beban TIDAK diikutkan — overlay, tidak boleh mengubah skala. */
+  let minR=0,maxR=0,minX=0,maxX=0;
+  const grow=z=>{minR=Math.min(minR,z.R);maxR=Math.max(maxR,z.R);minX=Math.min(minX,z.X);maxX=Math.max(maxX,z.X);};
+  const growBounds=b=>{grow(C(b.minR,b.minX));grow(C(b.maxR,b.maxX));};
+  S.relays.forEach(r=>{
+    if(!r.enabled) return;
+    const zone=relayZones(r,m);
+    [zone.zone1,zone.zone2,zone.zone3].forEach(zn=>{
+      const b=shapeBounds(charShape(r,zn,zone,m));   // geometri dari modul karakteristik
+      growBounds({minR:b.minR,maxR:b.maxR,minX:b.minX,maxX:b.maxX});
+    });
+    const fzr=relayFaultZ(r,m);
+    if(!fzr.behind){ grow(gz(r,fzr.zl,m)); grow(gz(r,fzr.z,m)); grow(gz(r,fzr.zm,m)); }
+  });
+  if(maxR<=minR){maxR=1;} if(maxX<=minX){maxX=1;}
+
+  let spanR=maxR-minR, spanX=maxX-minX;
+  const targetRatio=plotW/plotH;
+  if(spanR/spanX<targetRatio){const extra=spanX*targetRatio-spanR; maxR+=extra*0.85; minR-=extra*0.15;}
+  else{const extra=spanR/targetRatio-spanX; maxX+=extra;}
+  spanR=maxR-minR; spanX=maxX-minX;
+  const cx0=(minR+maxR)/2, cy0=(minX+maxX)/2;   // pusat data
+  /* ZOOM = jendela data. k: 1=jendela ~span data; <1=jendela LUAS (thumbnail, angka
+     mengecil, kotak tetap penuh & linear); >1=jendela sempit (detail angka). Pusat
+     jendela (cx,cy) dalam koordinat DATA. toPx memetakan titik -> piksel plot TETAP. */
+  const k=Math.min(Math.max(view.k||1,0.12),64);   // clamp defensif (UI juga membatasi)
+  const spanRw=spanR/k, spanXw=spanX/k;
+  const wcx = view.cx!==undefined && view.cx!==null ? view.cx : cx0;
+  const wcy = view.cy!==undefined && view.cy!==null ? view.cy : cy0;
+  view.cx=wcx; view.cy=wcy;   // materialize agar handler zoom/pan selalu punya pusat valid
+  const scale=plotH/spanXw;
+  const innerW=spanRw*scale;
+  const cx=padL+innerW/2, cy=padT+plotH/2;
+  const toPx=z=>({ x:padL+((z.R-wcx)/spanRw+0.5)*plotW, y:padT+((wcy-z.X)/spanXw+0.5)*plotH });
+  const pxToR=x=> wcx+(x-padL)/plotW*spanRw-spanRw/2;
+  const pxToX=y=> wcy-(y-padT)/plotH*spanXw+spanXw/2;
+
+  let s='';
+  /* CLIP hanya untuk KONTEN DATA (zona, wedge beban, titik gangguan). Grid, sumbu,
+     dan SEMUA label digambar DI LUAR clip — label tick menempati margin (y=440>426,
+     x=59<64) dan akan terpotong bila masuk grup clip. */
+  const cid='clipZ'+Math.floor(Math.random()*1e6);
+  s+=`<defs><clipPath id="${cid}"><rect x="${padL}" y="${padT}" width="${plotW}" height="${plotH}"/></clipPath></defs>`;
+
+  /* GRID DINAMIS (di luar clip): step 1-2-5 adaptif dari LEBAR JENDELA. Garis membentang
+     penuh kotak plot (dari tepi window), label di margin — selalu terlihat di zoom apapun. */
+  const niceStep=(raw)=>{ const p=Math.pow(10,Math.floor(Math.log10(raw))); const n=raw/p; return (n<1.5?1:n<3.5?2:n<7.5?5:10)*p; };
+  const stepR=niceStep(spanRw/6), stepX=niceStep(spanXw/5);
+  const decR=Math.max(0,-Math.floor(Math.log10(stepR))), decX=Math.max(0,-Math.floor(Math.log10(stepX)));
+  const yTop=padT, yBot=padT+plotH, xL=padL, xR2=padL+plotW;
+  const rStart=Math.ceil(pxToR(xL)/stepR)*stepR, rEnd=Math.floor(pxToR(xR2)/stepR)*stepR;
+  for(let rv=rStart; rv<=rEnd+stepR*1e-6; rv+=stepR){
+    const a=toPx(C(rv,0));
+    s+=`<line x1="${a.x}" y1="${yTop}" x2="${a.x}" y2="${yBot}" stroke="var(--line)" stroke-width="1"/>`;
+    s+=`<text x="${a.x}" y="${VBH-padB+14}" font-family="JetBrains Mono" font-size="9" fill="var(--ink-soft)" text-anchor="middle">${fmt(rv,decR)}</text>`;
+  }
+  const xStart=Math.ceil(pxToX(yBot)/stepX)*stepX, xEnd=Math.floor(pxToX(yTop)/stepX)*stepX;
+  for(let xv=xStart; xv<=xEnd+stepX*1e-6; xv+=stepX){
+    const c=toPx(C(0,xv));
+    s+=`<line x1="${xL}" y1="${c.y}" x2="${xR2}" y2="${c.y}" stroke="var(--line)" stroke-width="1"/>`;
+    s+=`<text x="${padL-5}" y="${c.y+3}" font-family="JetBrains Mono" font-size="9" fill="var(--ink-soft)" text-anchor="end">${fmt(xv,decX)}</text>`;
+  }
+  /* garis sumbu nol — melintang penuh plot saat 0 di dalam window */
+  const R0=toPx(C(0,0));
+  if(R0.y>=yTop && R0.y<=yBot) s+=`<line x1="${xL}" y1="${R0.y}" x2="${xR2}" y2="${R0.y}" stroke="var(--ink)" stroke-width="1.4"/>`;
+  if(R0.x>=xL && R0.x<=xR2)    s+=`<line x1="${R0.x}" y1="${yTop}" x2="${R0.x}" y2="${yBot}" stroke="var(--ink)" stroke-width="1.4"/>`;
+  s+=`<text x="${xR2-6}" y="${yBot-8}" font-family="JetBrains Mono" font-size="11" fill="var(--ink)" text-anchor="end">R (Ω)</text>`;
+  s+=`<text x="${xL+6}" y="${yTop+12}" font-family="JetBrains Mono" font-size="11" fill="var(--ink)">X (Ω)</text>`;
+
+  /* ======= KONTEN DATA (di-clip ke kotak plot) ======= */
+  s+=`<g clip-path="url(#${cid})">`;
+
+  /* Lensa beban (overlay, TIDAK memengaruhi skala): sektor annular TERTUTUP.
+     Batas dalam = |Z| beban maksimum @0.85 pu V (kriteria loadability, PRC-023) —
+     lebih berat dari ini beban tak dapat ditransfer. Batas luar = |Z| beban ringan
+     (20% S maks). Daftar di antaranya = seluruh |Z| yang MUNGKIN pada operasi normal sehat. */
+  let edgeHint='';
+  if(P.showLoad){
+    const la=rad(P.pfAngleDeg+P.loadEncroachDeg);
+    const rIn=m.loadzMin, rOut=m.loadzNom;
+    const a1=-la, a2=+la;
+    const I1=toPx(C(rIn*Math.cos(a1), rIn*Math.sin(a1))), I2=toPx(C(rIn*Math.cos(a2), rIn*Math.sin(a2)));
+    const E1=toPx(C(rOut*Math.cos(a1), rOut*Math.sin(a1))), E2=toPx(C(rOut*Math.cos(a2), rOut*Math.sin(a2)));
+    s+=`<path d="M ${I1.x} ${I1.y} A ${rIn*scale} ${rIn*scale} 0 0 1 ${I2.x} ${I2.y} L ${E2.x} ${E2.y} A ${rOut*scale} ${rOut*scale} 0 0 0 ${E1.x} ${E1.y} Z" fill="var(--green)" opacity="0.07" stroke="var(--green)" stroke-width="1.2" stroke-dasharray="5 4"/>`;
+    s+=`<text x="${padL+plotW-6}" y="${padT+10}" font-family="JetBrains Mono" font-size="9" fill="var(--green)" text-anchor="end">lensa beban (${fmt(rIn,1)}–${fmt(rOut,1)} Ω)</text>`;
+    /* titik operasi pra-gangguan: Z = V²/S(beban aktual) pada sudut beban aktual.
+       Dinamis — bergeser setiap beban/sudut normal digeser. Berdenyut agar mudah ditemukan. */
+    const Pn=toPx(m.zlNow);
+    s+=`<circle cx="${Pn.x}" cy="${Pn.y}" r="8" fill="none" stroke="var(--green)" stroke-width="1.4"><animate attributeName="r" values="6;13;6" dur="2.4s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.8;0.1;0.8" dur="2.4s" repeatCount="indefinite"/></circle>`;
+    s+=`<circle cx="${Pn.x}" cy="${Pn.y}" r="4" fill="var(--green)" stroke="var(--surface)" stroke-width="1.2"/>`;
+    const fl=Pn.x>padL+plotW-30;
+    s+=`<text x="${fl?Pn.x-7:Pn.x+7}" y="${Pn.y-6}" font-family="JetBrains Mono" font-size="8.5" fill="var(--green)" font-weight="700" text-anchor="${fl?'end':'start'}">sistem</text>`;
+    /* penunjuk tepi bila titik di luar jendela (mis. view di-zoom ke zona saja) */
+    if(Pn.x<xL||Pn.x>xR2||Pn.y<yTop||Pn.y>yBot){
+      const cxp=padL+plotW/2, cyp=padT+plotH/2;
+      const dx=Pn.x-cxp, dy=Pn.y-cyp;
+      const tt=Math.min((plotW/2-14)/Math.abs(dx||1e-9),(plotH/2-14)/Math.abs(dy||1e-9));
+      const ex=cxp+dx*tt, ey=cyp+dy*tt, th=Math.atan2(dy,dx);
+      const x1=ex+8*Math.cos(th), y1=ey+8*Math.sin(th);
+      const bx1=ex+2.5*Math.cos(th+2.5), by1=ey+2.5*Math.sin(th+2.5);
+      const bx2=ex+2.5*Math.cos(th-2.5), by2=ey+2.5*Math.sin(th-2.5);
+      edgeHint=`<polygon points="${x1},${y1} ${bx1},${by1} ${bx2},${by2}" fill="var(--green)"/><circle cx="${ex}" cy="${ey}" r="3.5" fill="var(--green)" stroke="var(--surface)" stroke-width="1"/>`;
+    }
+  }
+
+  /* zona tiap relay — digambar pada koordinat GLOBAL (origin = bus relay-nya) */
+  const ZC={1:'var(--red)',2:'var(--copper)',3:'var(--blue)'};
+  S.relays.forEach(r=>{
+    if(!r.enabled) return;
+    const zone=relayZones(r,m);
+    const rt=r.id===S.selectedRelayId;
+    function shapeSVG(zn,opacity,dash,sw,fill){
+      const sh=charShape(r,zn,zone,m);   // satu sumber geometri — modul karakteristik
+      const style=`fill="${fill}" fill-opacity="${opacity}" stroke="${fill}" stroke-width="${sw}" stroke-dasharray="${dash}"`;
+      if(sh.kind==='circle'){ const cp=toPx(gz(r,sh.c,m)); return `<circle cx="${cp.x}" cy="${cp.y}" r="${sh.r*scale}" ${style}/>`; }
+      const p1=toPx(gz(r,sh.c1,m)), p2=toPx(gz(r,sh.c2,m));
+      return `<rect x="${Math.min(p1.x,p2.x)}" y="${Math.min(p1.y,p2.y)}" width="${Math.abs(p2.x-p1.x)}" height="${Math.abs(p2.y-p1.y)}" ${style}/>`;
+    }
+    if(P.showZones){
+      s+=shapeSVG(zone.zone3,0.05,'2 3',1.2,ZC[3]);
+      s+=shapeSVG(zone.zone2,0.08,'5 3',1.2,ZC[2]);
+      s+=shapeSVG(zone.zone1,0.13,'0',rt?2:1.6,ZC[1]);
+    } else {
+      s+=shapeSVG(zone.zone1,0.13,'0',rt?2:1.6,ZC[1]);
+    }
+    /* penanda lokasi bus relay */
+    const Op=toPx(relayOrigin(r,m));
+    s+=`<circle cx="${Op.x}" cy="${Op.y}" r="3" fill="none" stroke="var(--ink-soft)" stroke-width="1"/>`;
+    s+=`<text x="${Op.x+5}" y="${Op.y-4}" font-family="JetBrains Mono" font-size="8.5" fill="${rt?'var(--blue)':'var(--ink-soft)'}" font-weight="${rt?700:400}">${r.id}</text>`;
+  });
+
+  /* penanda titik bus A/B/C — wajik berisi + label huruf tebal, beda dari lingkaran hollow
+     penanda asal relay (R1..R4) maupun titik gangguan. Koordinat sekunder, lewat toPx (invariant origin). */
+  const busPts=[
+    {t:'A',p:C(0,0)},
+    {t:'B',p:m.Z1},
+    {t:'C',p:add(m.Z1,m.Z2)}
+  ];
+  busPts.forEach(bpt=>{
+    const bp=toPx(bpt.p), bx=bp.x, by=bp.y, d=5;
+    const flip= bx>padL+plotW-26;   // label pindah ke kiri bila titik dekat tepi kanan jendela
+    s+=`<rect x="${bx-d}" y="${by-d}" width="${d*2}" height="${d*2}" transform="rotate(45 ${bx} ${by})" fill="var(--ink)" opacity="0.88" stroke="var(--surface)" stroke-width="1"/>`;
+    s+=`<text x="${flip?bx-d-3:bx+d+3}" y="${by+3}" font-family="JetBrains Mono" font-size="9.5" fill="var(--ink)" font-weight="700" text-anchor="${flip?'end':'start'}">${bpt.t}</text>`;
+  });
+
+  /* ray saluran + pasangan titik gangguan relay terpilih.
+     Z ASLI    = impedansi saluran MURNI ke titik gangguan (tanpa Rf) — selalu TEPAT di ray,
+                 inilah lokasi gangguan sebenarnya (mis. 50% antara dua bus).
+     Z TERUKUR = yang dilihat relay — bergeser HORIZONTAL oleh Rf·infeed, lalu diskalakan
+                 error CT/PT. Garis dari origin ke titik sengaja TIDAK digambar: geseran Rf
+                 bukan radial, jadi konektor asli→terukur-lah yang menunjukkan penyimpangannya. */
+  const sel=S.relays.find(r=>r.id===S.selectedRelayId);
+  const zoneSel=relayZones(sel,m);
+  const Os=toPx(relayOrigin(sel,m));
+  const refEnd=toPx(gz(sel,fromPolar(mag(zoneSel.zone3)*1.05,sel.lineRef==='L1'?m.lineAngle:ang(m.Z2)),m));
+  s+=`<line x1="${Os.x}" y1="${Os.y}" x2="${refEnd.x}" y2="${refEnd.y}" stroke="var(--ink-soft)" stroke-width="1" stroke-dasharray="3 3"/>`;
+  const fzSel=relayFaultZ(sel,m);
+  const zoneColor = decisions[sel.id].zone===0?'var(--green)':ZC[decisions[sel.id].zone];
+  let legAsli=false, legTerukur=false, legRf=false, legErr=false;
+  if(!fzSel.behind){
+    const pa=toPx(gz(sel,fzSel.zl,m));   // Z asli — di ray saluran
+    const pm=toPx(gz(sel,fzSel.zm,m));   // Z terukur — masukan relay
+    const sep=Math.hypot(pm.x-pa.x,pm.y-pa.y);
+    if(sep>2){
+      /* konektor: zl→z = geseran Rf·infeed (murni horizontal); z→zm = efek error CT/PT */
+      const pz=toPx(gz(sel,fzSel.z,m));
+      legRf=true;
+      s+=`<line x1="${pa.x}" y1="${pa.y}" x2="${pz.x}" y2="${pz.y}" stroke="var(--copper)" stroke-width="1.6" stroke-dasharray="5 3"/>`;
+      if(P.ctErr!==0||P.ptErr!==0){
+        legErr=true;
+        s+=`<line x1="${pz.x}" y1="${pz.y}" x2="${pm.x}" y2="${pm.y}" stroke="var(--ink-soft)" stroke-width="1.3" stroke-dasharray="2 3"/>`;
+      }
+      legAsli=true;
+      s+=`<circle cx="${pa.x}" cy="${pa.y}" r="5.5" fill="var(--surface)" stroke="${zoneColor}" stroke-width="2"/>`;
+      const right=pm.x>=pa.x;
+      s+=`<text x="${right?pa.x-8:pa.x+8}" y="${pa.y-7}" font-family="JetBrains Mono" font-size="8.5" fill="${zoneColor}" text-anchor="${right?'end':'start'}">asli</text>`;
+      s+=`<text x="${right?pm.x+8:pm.x-8}" y="${pm.y+12}" font-family="JetBrains Mono" font-size="8.5" fill="${zoneColor}" text-anchor="${right?'start':'end'}">terukur</text>`;
+    } else {
+      /* Rf=0 & tanpa error CT/PT ⇒ asli & terukur berimpit — tunjukkan lewat cincin luar */
+      legAsli=true;
+      s+=`<circle cx="${pm.x}" cy="${pm.y}" r="8" fill="none" stroke="${zoneColor}" stroke-width="1.4" opacity=".8"/>`;
+    }
+    legTerukur=true;
+    s+=`<circle cx="${pm.x}" cy="${pm.y}" r="4.5" fill="${zoneColor}" stroke="var(--surface)" stroke-width="1.2"/>`;
+  }
+  if(edgeHint) s+=edgeHint;   // panah penuding sistem bila titik di luar jendela
+  s+=`</g>`; // tutup clip
+
+  svg.innerHTML=s;
+  /* peta jendela utk handler zoom/pan (skala data saat ini) */
+  svg._map={spanR,spanX,cx0,cy0,padL,padT,plotW,plotH};
+  /* legenda marker gangguan: cincin hollow = lokasi asli, titik solid = masukan relay */
+  $('legend').innerHTML=`
+    <span><i style="background:var(--red)"></i>Zone 1</span>
+    <span><i style="background:var(--copper)"></i>Zone 2</span>
+    <span><i style="background:var(--blue)"></i>Zone 3</span>
+    ${P.showLoad?`<span><i style="border:1.5px dashed var(--green);background:var(--green);opacity:.25;width:10px;height:10px;border-radius:50%"></i>Lensa beban</span><span><i style="background:var(--green);width:8px;height:8px;border-radius:50%"></i>Titik sistem normal</span>`:''}
+    ${legAsli?`<span><i style="border:2px solid ${zoneColor};background:var(--surface);width:8px;height:8px;border-radius:50%"></i>Z asli (${sel.id}, di saluran)</span>`:''}
+    ${legTerukur?`<span><i style="background:${zoneColor}"></i>Z terukur (masuk relay)</span>`:''}
+    ${legRf?`<span><i style="border-top:2px dashed var(--copper);height:0;width:12px;background:none"></i>geseran Rf·infeed</span>`:''}
+    ${legErr?`<span><i style="border-top:2px dotted var(--ink-soft);height:0;width:12px;background:none"></i>error CT/PT</span>`:''}`;
+}
+
+/* ---------- single-line diagram dengan 4 relay ---------- */
+/* Hitbox drag titik fault: di BAWAH garis bebas (mudah didrag dari bawah),
+   di ATAS garis hanya strip sempit ±14px sekitar penanda merah dan tidak
+   naik ke band kotak relay (y−18 ke atas) — agar klik nyala/matikan relay
+   tidak sengaja memulai drag. Koordinat dalam ruang viewBox SVG. */
+function sldDragOK(px,py,faultX,y){
+  if(py>=y) return true;
+  return Math.abs(px-faultX)<=14 && py>=y-18;
+}
+function renderSLD(m){
+  const svg=$('sld');
+  const VBW=980,VBH=124, y=58, half=24;
+  const totalKm=P.l1+P.l2;
+  /* Simetri kiri–kanan: margin kiri = margin kanan (xA = VBW − xC). Saluran A–B–C
+     digambar PROPORSIONAL km (l1 : l2), jadi panjang garis = panjang saluran sebenarnya. */
+  const srcX=40;
+  const xA=110, xC=980-110, span=xC-xA;
+  const xB=xA+span*(P.l1/Math.max(totalKm,0.001));
+  const faultX=xA+span*(P.pos/Math.max(totalKm,0.001));
+  let s='';
+  /* semua LABEL teks dikumpulkan di `lbl` dan dirender PALING AKHIR — teks tidak
+     pernah tertimpa garis saluran, panah gangguan, maupun dash aliran (bug lama:
+     "Saluran 1 · 100 km" tertimup panah merah). */
+  let lbl='';
+  /* label diberi halo (stroke warna latar di bawah glyph) agar tetap terbaca
+     saat berada di atas dash aliran yang bergerak. */
+  const halo=`paint-order:stroke;stroke:var(--surface);stroke-width:4px;`;
+
+  /* sumber di kiri Bus A — simbol masuk kanvas (srcX jauh dari tepi), label di bawah */
+  s+=`<line x1="${srcX}" y1="${y}" x2="${xA}" y2="${y}" stroke="var(--blue)" stroke-width="3"/>`;
+  s+=`<line x1="${srcX}" y1="${y-13}" x2="${srcX}" y2="${y+13}" stroke="var(--blue)" stroke-width="3"/>`;
+  s+=`<circle cx="${srcX}" cy="${y}" r="3.5" fill="var(--blue)"/>`;
+  lbl+=`<text x="${srcX}" y="${y+22}" font-family="JetBrains Mono" font-size="10" fill="var(--ink-soft)" text-anchor="middle" style="${halo}">Sumber</text>`;
+
+  /* bus = garis vertikal tebal (terhubung penuh, tanpa celah) */
+  const bus=(x,label)=>`
+    <line x1="${x}" y1="${y-half}" x2="${x}" y2="${y+half}" stroke="var(--ink)" stroke-width="4" stroke-linecap="round"/>
+    <line x1="${x-14}" y1="${y}" x2="${x+14}" y2="${y}" stroke="var(--ink)" stroke-width="4" stroke-linecap="round"/>`;
+
+  /* panah aliran: polygon berjalan sepanjang lintasan (a→b) via animateMotion.
+     Bentuk = mata panah runcing sederhana 4 titik (ekor cekung, tak berpotongan diri)
+     sehingga arah terbaca jelas. rotate:auto membalik panah utk lintasan ke kiri.
+     Jarak antar-panah lega (spacing); kecepatan seragam 125 px/s; begin negatif
+     menyebarkan panah di sepanjang lintasan sejak frame pertama. */
+  const ARROW_N=`14,0 0,-5 4,0 0,5`;         // panah normal (panjang 14, lebar 10)
+  const ARROW_BIG=`19,0 0,-6.5 5.5,0 0,6.5`; // panah arus gabungan sumber+infeed (besar)
+  const flowArrow=(a,b,color,big)=>{
+    const len=Math.abs(b-a); if(len<8) return;
+    const spacing=big?76:64;
+    const n=Math.max(1,Math.round(len/spacing));
+    const durN=len/125, dur=durN.toFixed(2);
+    const path=`M ${a} ${y} L ${b} ${y}`;
+    for(let i=0;i<n;i++){
+      const begin=(-(i*durN/n)).toFixed(2);
+      s+=`<polygon points="${big?ARROW_BIG:ARROW_N}" fill="${color}" opacity="0.88"><animateMotion dur="${dur}s" begin="${begin}s" repeatCount="indefinite" rotate="auto" path="${path}"/></polygon>`;
+    }
+  };
+  /* saluran 1 & 2 — penghantar statis saja. ARUS digambar terpisah sesuai fisika
+     jaringan radial (blok animasi aliran di bawah) — bukan di semua segmen. */
+  const line=(a,b)=>{
+    s+=`<line x1="${a}" y1="${y}" x2="${b}" y2="${y}" stroke="var(--ink)" stroke-width="2.5"/>`;
+  };
+  line(srcX,xA);
+  line(xA,xB);
+  lbl+=`<text x="${(xA+xB)/2}" y="${y-11}" font-family="JetBrains Mono" font-size="9.5" fill="var(--ink-soft)" text-anchor="middle" style="${halo}">Saluran 1 · ${fmt(P.l1,0)} km</text>`;
+  line(xB,xC);
+  lbl+=`<text x="${(xB+xC)/2}" y="${y-11}" font-family="JetBrains Mono" font-size="9.5" fill="var(--ink-soft)" text-anchor="middle" style="${halo}">Saluran 2 · ${fmt(P.l2,0)} km</text>`;
+  s+=bus(xA); s+=bus(xB); s+=bus(xC);
+  lbl+=`<text x="${xA}" y="${y-half-9}" font-family="JetBrains Mono" font-size="10.5" fill="var(--ink)" text-anchor="middle" font-weight="700" style="${halo}">Bus A</text>`;
+  lbl+=`<text x="${xB}" y="${y-half-9}" font-family="JetBrains Mono" font-size="10.5" fill="var(--ink)" text-anchor="middle" font-weight="700" style="${halo}">Bus B</text>`;
+  lbl+=`<text x="${xC}" y="${y-half-9}" font-family="JetBrains Mono" font-size="10.5" fill="var(--ink)" text-anchor="middle" font-weight="700" style="${halo}">Bus C</text>`;
+
+  /* kotak relay — klik = nyala/matikan (bisa >1 aktif); tanpa arah panah.
+     R1 kanan A · R3 kiri B · R2 kanan B · R4 kiri C */
+  const relayPos={R1:{x:xA+46,y:y-35},R2:{x:xB+46,y:y-35},R3:{x:xB-46,y:y-35},R4:{x:xC-46,y:y-35}};
+  S.relays.forEach(r=>{
+    const p=relayPos[r.id];
+    const selc=r.id===S.selectedRelayId;
+    const on=r.enabled;
+    const col=!on?'var(--line)':(selc?'var(--blue)':'var(--ink-soft)');
+    s+=`<g class="rels" data-rel="${r.id}" style="cursor:pointer;${on?'':'opacity:.45;'}">
+      <rect x="${p.x-16}" y="${p.y-13}" width="32" height="26" rx="4" fill="${!on?'var(--bg)':(selc?'var(--blue-soft)':'var(--surface)')}" stroke="${col}" stroke-width="${selc&&on?1.8:1}" ${on?'':'stroke-dasharray="3 2"'}/>
+    </g>`;
+    lbl+=`<text x="${p.x}" y="${p.y+4}" font-family="JetBrains Mono" font-size="9.5" fill="${col}" text-anchor="middle" font-weight="600" style="${halo}">${r.id}</text>`;
+  });
+
+  /* simbol grid / infeed di Bus B — klik = nyala/matikan (sesuai setting) */
+  const gi=P.infeedOn;
+  const gc1=gi?'var(--blue)':'var(--line)', gc2=gi?'var(--blue-soft)':'var(--bg)';
+  s+=`<g class="grid" data-grid="1" style="cursor:pointer;${gi?'':'opacity:.45;'}">
+    <line x1="${xB}" y1="${y}" x2="${xB}" y2="${y+18}" stroke="${gc1}" stroke-width="1.2" stroke-dasharray="2 2"/>
+    <rect x="${xB-15}" y="${y+18}" width="30" height="18" rx="3" fill="${gc2}" stroke="${gc1}" stroke-width="1.2" ${gi?'':'stroke-dasharray="3 2"'}/>
+    <line x1="${xB-10}" y1="${y+23}" x2="${xB+10}" y2="${y+23}" stroke="${gc1}" stroke-width="1.2"/>
+    <line x1="${xB-10}" y1="${y+26.5}" x2="${xB+10}" y2="${y+26.5}" stroke="${gc1}" stroke-width="1.2"/>
+    <line x1="${xB-10}" y1="${y+30}" x2="${xB+10}" y2="${y+30}" stroke="${gc1}" stroke-width="1.2"/>
+  </g>`;
+  lbl+=`<text x="${xB+20}" y="${y+29}" font-family="JetBrains Mono" font-size="8.5" fill="${gi?'var(--blue)':'var(--line)'}" text-anchor="start" style="${halo}">Infeed ${gi?'on':'off'}</text>`;
+
+  const ftLabel=P.faultType==='3ph'?'3φ':P.faultType==='phph'?'φ-φ':'φ-G';
+  /* label mengikuti mode gangguan: R → "Rf=..Ω", Z → "Zf=R+jX Ω" */
+  const zfLabel = P.rfMode==='Z'
+    ? `${ftLabel} · Zf=${fmt(P.rf,0)}+j${fmt(P.xf,0)}Ω`
+    : `${ftLabel} · Rf=${fmt(P.rf,0)}Ω`;
+  const flx=Math.max(70,Math.min(VBW-70,faultX));
+  s+=`<g id="faultHandle" style="cursor:ew-resize;">
+      <line x1="${faultX}" y1="${y-30}" x2="${faultX}" y2="${y+30}" stroke="var(--red)" stroke-width="2"/>
+      <polygon points="${faultX-7},${y-30} ${faultX+7},${y-30} ${faultX},${y-18}" fill="var(--red)"/>
+      <circle cx="${faultX}" cy="${y}" r="9" fill="var(--red)" opacity="0.15"/>
+    </g>`;
+  lbl+=`<text x="${flx}" y="${y+46}" font-family="JetBrains Mono" font-size="10" fill="var(--red)" text-anchor="middle" font-weight="600" style="${halo}">${zfLabel}</text>`;
+
+  /* ===== animasi aliran daya (SELALU tampil, sesuai fisika radial) =====
+     Jaringan radial: arus gangguan hanya mengalir dari sumber-sumber AKTIF menuju
+     titik gangguan; segmen SETELAH gangguan tidak dialiri apa pun.
+     - Sumber→gangguan : merah (selalu).
+     - Infeed (Bus B)→gangguan : copper, hanya saat infeed nyala.
+     - Gangguan di L2 & infeed nyala : arus L2 = gabungan sumber+infeed →
+       panah Sumber→B→gangguan pakai ukuran BESAR.
+     - Tidak pernah ada dua arus menumpuk di satu segmen (warna langsung digabung). */
+  const faultOnL2=P.pos>P.l1;
+  if(!faultOnL2){
+    /* SC di saluran 1 */
+    flowArrow(srcX,faultX,'var(--red)',false);
+    if(P.infeedOn && Math.abs(faultX-xB)>2) flowArrow(xB,faultX,'var(--copper)',false);
+  }else{
+    /* SC di saluran 2: sumber utama melewati A dan B menuju gangguan */
+    const big=P.infeedOn;
+    flowArrow(srcX,xB,'var(--red)',big);
+    flowArrow(xB,faultX,'var(--red)',big);
+    /* setelah gangguan (menuju C): tanpa arus — tidak digambar apa pun */
+  }
+  s+=`<circle class="sc-pulse" cx="${faultX}" cy="${y}" r="14" fill="none" stroke="var(--red)" stroke-width="2"/>`;
+  lbl+=`<text x="${flx}" y="${y+16}" font-family="JetBrains Mono" font-size="8.5" fill="var(--red)" text-anchor="middle" style="${halo}">SC</text>`;
+
+  /* posisi gangguan yg DIPERSEPSIKAN relay terpilih = X terukur / X-per-km saluran yg dihadapi.
+     Rf tidak mengubah X, tapi infeed & error CT/PT menggesernya — inilah "titik ini" yg
+     dilihat relay, dibandingkan dgn penanda merah (posisi asli). */
+  const selR=S.relays.find(r=>r.id===S.selectedRelayId);
+  if(selR){
+    const fzp=relayFaultZ(selR,m);
+    if(!fzp.behind){
+      const baseKm={A:0,B:P.l1,C:P.l1+P.l2}[selR.bus];
+      const sgn=selR.direction==='fwd'?1:-1;
+      /* x-per-km = P.x1 (Ω/km) — dulu salah: P.x1/P.l1 = Ω/km² → km meledak (fault
+         selalu ter-clamp ke Bus C). Perbaikan ini menempatkan penanda di saluran benar. */
+      const xPk=selR.lineRef==='L1'?P.x1:P.x2;
+      const kmPerc=Math.max(0,Math.min(totalKm,baseKm+sgn*fzp.zmPrim.X/xPk));
+      const percX=xA+span*(kmPerc/Math.max(totalKm,0.001));
+      if(Math.abs(percX-faultX)>2){
+        const lpx=Math.max(70,Math.min(VBW-70,percX));
+        s+=`<g style="pointer-events:none;">
+          <line x1="${percX}" y1="${y-24}" x2="${percX}" y2="${y+24}" stroke="var(--copper)" stroke-width="1.5" stroke-dasharray="3 2"/>
+          <polygon points="${percX},${y-9} ${percX+6},${y} ${percX},${y+9} ${percX-6},${y}" fill="var(--surface)" stroke="var(--copper)" stroke-width="1.8"/>
+        </g>`;
+        lbl+=`<text x="${lpx}" y="${y+58}" font-family="JetBrains Mono" font-size="9" fill="var(--copper)" text-anchor="middle" style="${halo}">terlihat ${selR.id}</text>`;
+      }
+    }
+  }
+
+  s+=lbl;   // label dirender terakhir — di atas segala garis/panah/dash
+  svg.innerHTML=s;
+  svg._geom={x0:xA,x2:xC,totalKm};
+  /* klik kotak relay = toggle nyala/matikan (beberapa boleh aktif sekaligus) */
+  svg.querySelectorAll('.rels').forEach(g=>g.addEventListener('click',()=>{
+    const r=S.relays.find(x=>x.id===g.dataset.rel);
+    if(r){ r.enabled=!r.enabled; refreshRelayList(); render(); }
+  }));
+  /* klik simbol grid/infeed = toggle sumber remote */
+  svg.querySelectorAll('.grid').forEach(g=>g.addEventListener('click',()=>{
+    P.infeedOn=!P.infeedOn; $('infeedOn').checked=P.infeedOn; render();
+  }));
+
+  if(!svg._bound){
+    svg._bound=true; let dragging=false;
+    const eventPt=evt=>{
+      const rect=svg.getBoundingClientRect();
+      const cx=(evt.touches?evt.touches[0].clientX:evt.clientX);
+      const cy=(evt.touches?evt.touches[0].clientY:evt.clientY);
+      return { x:(cx-rect.left)/rect.width*VBW, y:(cy-rect.top)/rect.height*VBH };
+    };
+    const posFromX=relX=>{
+      const g=svg._geom;
+      let frac=(relX-g.x0)/(g.x2-g.x0); frac=Math.max(0,Math.min(1,frac));
+      return frac*g.totalKm;
+    };
+    const faultXAt=()=>{
+      const g=svg._geom;
+      return g.x0+(g.x2-g.x0)*(P.pos/Math.max(g.totalKm,0.001));
+    };
+    /* hitbox dicek HANYA di awal drag (pointerdown): di luar zona penanda -> abaikan.
+       Selama drag aktif (pointermove) kursor bebas ke mana pun — drag tidak "nyangkut". */
+    svg.addEventListener('pointerdown',e=>{
+      if(e.target.closest('.rels')||e.target.closest('.grid'))return;
+      const pt=eventPt(e);
+      if(!sldDragOK(pt.x,pt.y,faultXAt(),y))return;
+      dragging=true;
+      P.pos=posFromX(pt.x); $('pos').value=P.pos; $('posv').textContent=fmt(P.pos,0); render();
+    });
+    window.addEventListener('pointermove',e=>{ if(!dragging)return; const p=posFromX(eventPt(e).x); P.pos=p; $('pos').value=p; $('posv').textContent=fmt(p,0); render(); });
+    window.addEventListener('pointerup',()=>dragging=false);
+  }
+}
+
+/* ---------- staircase (relay terpilih) ---------- */
+function renderStaircase(m,decisions){
+  const svg=$('staircase');
+  const VBW=640,VBH=170, padL=60,padR=30,padT=16,padB=34;
+  const plotW=VBW-padL-padR, plotH=VBH-padT-padB;
+  const sel=S.relays.find(r=>r.id===S.selectedRelayId);
+  const zone=relayZones(sel,m);
+  const z1=mag(zone.zone1), z2=mag(zone.zone2), z3=mag(zone.zone3);
+  const maxZ=z3*1.25;
+  const sx=z=>padL+(z/maxZ)*plotW;
+  const maxT=Math.max(sel.t3*1.2,1.5);
+  const sy=t=>padT+plotH-(t/maxT)*plotH;
+  let s='';
+  s+=`<line x1="${padL}" y1="${padT+plotH}" x2="${padL+plotW}" y2="${padT+plotH}" stroke="var(--ink)" stroke-width="1.3"/>`;
+  s+=`<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT+plotH}" stroke="var(--ink)" stroke-width="1.3"/>`;
+  s+=`<text x="${padL+plotW/2}" y="${VBH-6}" font-family="JetBrains Mono" font-size="10" fill="var(--ink-soft)" text-anchor="middle">|Z| terukur (Ω sekunder)</text>`;
+  s+=`<text x="14" y="${padT+8}" font-family="JetBrains Mono" font-size="10" fill="var(--ink-soft)">t (s)</text>`;
+  const ZC={1:'var(--red)',2:'var(--copper)',3:'var(--blue)'};
+  const steps=[[0,z1,0.02,ZC[1],'Zone 1'],[z1,z2,sel.t2,ZC[2],'Zone 2'],[z2,z3,sel.t3,ZC[3],'Zone 3']];
+  steps.forEach(([a,b,t,color,label])=>{
+    const x1=sx(a), x2=sx(b), yv=sy(t), ybase=padT+plotH;
+    s+=`<rect x="${x1}" y="${yv}" width="${x2-x1}" height="${ybase-yv}" fill="${color}" fill-opacity="0.15" stroke="${color}" stroke-width="1.3"/>`;
+    s+=`<text x="${(x1+x2)/2}" y="${yv-6}" font-family="JetBrains Mono" font-size="9.5" fill="${color}" text-anchor="middle">${label} · ${t<0.1?'instant':fmt(t,2)+'s'}</text>`;
+  });
+  const fzRel=relayFaultZ(sel,m);
+  const fzMag = fzRel.behind ? maxZ*0.99 : Math.min(mag(fzRel.z),maxZ*0.99);
+  const fx=sx(fzMag);
+  const zoneColor = decisions[sel.id].zone===0?'var(--green)':ZC[decisions[sel.id].zone];
+  s+=`<line x1="${fx}" y1="${padT}" x2="${fx}" y2="${padT+plotH}" stroke="${zoneColor}" stroke-width="1.6" stroke-dasharray="4 3"/>`;
+  s+=`<circle cx="${fx}" cy="${padT+plotH}" r="5" fill="${zoneColor}"/>`;
+  /* marker Z terukur (error CT/PT) di tangga */
+  if(P.ctErr!==0||P.ptErr!==0){
+    const fzM = fzRel.behind ? maxZ*0.99 : Math.min(mag(fzRel.zm),maxZ*0.99);
+    const fxm=sx(fzM);
+    s+=`<line x1="${fxm}" y1="${padT}" x2="${fxm}" y2="${padT+plotH}" stroke="var(--copper)" stroke-width="1.4" stroke-dasharray="3 3"/>`;
+    s+=`<circle cx="${fxm}" cy="${padT+plotH}" r="4" fill="var(--copper)" stroke="var(--surface)" stroke-width="1.2"/>`;
+  }
+  svg.innerHTML=s;
+}
+
+/* ---------- readout ---------- */
+const typeNotes={
+  impedance:'Impedance: lingkaran penuh berpusat di origin — non-directional, butuh directional element terpisah.',
+  reactance:'Reactance: hanya sensitif terhadap X; toleran Rf tapi rentan overreach saat beban resistif besar.',
+  mho:'Mho: inherently directional, lingkaran melewati origin di sepanjang sudut RCA (τ). Makin besar Rf & infeed, makin mudah lolos zona.',
+  quadrilateral:'Quadrilateral: R-reach & X-reach independen; lebih toleran gangguan resistif dari mho.'
+};
+function updateReadout(m,decisions){
+  $('z1out').textContent=`Z1 = ${fmt(m.Z1p.R,2)} + j${fmt(m.Z1p.X,2)} Ω`;
+  $('z2out').textContent=`Z2 = ${fmt(m.Z2p.R,2)} + j${fmt(m.Z2p.X,2)} Ω`;
+  $('sirOut').innerHTML=`SIR = |Zs|/|Z1| = <b>${fmt(m.SIR,2)}</b>`;
+  $('loadzOut').textContent=`Lensa beban ${fmt(m.loadzMin,1)}–${fmt(m.loadzNom,1)} Ω · titik sistem ${fmt(mag(m.zlNow),1)} Ω ∠${fmt(P.loadAngNow,0)}°`;
+
+  const sel=S.relays.find(r=>r.id===S.selectedRelayId);
+  const dec=decisions[sel.id];
+  const zoneNames={0:'TIDAK TRIP',1:'TRIP — ZONE 1',2:'TRIP — ZONE 2',3:'TRIP — ZONE 3'};
+  const ZC={0:'var(--green)',1:'var(--red)',2:'var(--copper)',3:'var(--blue)'};
+  const ZS={0:'var(--green-soft)',1:'var(--red-soft)',2:'var(--copper-soft)',3:'var(--blue-soft)'};
+  const zone=relayZones(sel,m);
+  $('statusBox').style.background=ZS[dec.zone];
+  $('zoneLabel').style.color=ZC[dec.zone]; $('zoneLabel').textContent=`${sel.id}: ${zoneNames[dec.zone]}`;
+  $('timeLabel').style.color=ZC[dec.zone];
+  $('timeLabel').textContent = dec.zone===0?'di luar seluruh zona': dec.zone===1?'waktu operasi: instantaneous':`waktu operasi: ${fmt(dec.time,2)} s`;
+
+  const fzSel=relayFaultZ(sel,m);
+  const errOn=(P.ctErr!==0||P.ptErr!==0);
+  const errDelta=mag(fzSel.z)-mag(fzSel.zm);
+  $('readout').innerHTML=`
+    <div class="rline"><span>Relay</span><span>${sel.name}</span></div>
+    <div class="rline"><span>Karakteristik</span><span>${sel.charType}</span></div>
+    <div class="rline"><span>Z asli (saluran, primer)</span><span>${fmt(fzSel.zlPrim.R,2)} + j${fmt(fzSel.zlPrim.X,2)} Ω${fzSel.behind?' (di belakang)':''}</span></div>
+    <div class="rline"><span>Z apparent (primer)</span><span>${fmt(fzSel.zPrim.R,2)} + j${fmt(fzSel.zPrim.X,2)} Ω${fzSel.behind?' (di belakang)':''}</span></div>
+    <div class="rline"><span>Z apparent (sekunder)</span><span>${fmt(fzSel.z.R,3)} + j${fmt(fzSel.z.X,3)} Ω${fzSel.behind?' (di belakang)':''}</span></div>
+    ${errOn?`<div class="rline"><span>Z terukur (CT${P.ctErr>0?'+':''}${fmt(P.ctErr,1)}% / PT${P.ptErr>0?'+':''}${fmt(P.ptErr,1)}%)</span><span>${fmt(fzSel.zm.R,3)} + j${fmt(fzSel.zm.X,3)} Ω</span></div>
+    <div class="rline"><span>Δ|Z| error</span><span>${errDelta>=0?'−':'+'}${fmt(Math.abs(errDelta),3)} Ω (${errDelta>0?'overreach':errDelta<0?'underreach':'—'})</span></div>`:''}
+    <div class="rline"><span>|Z| ∠θ</span><span>${fmt(mag(fzSel.z),3)} Ω ∠${fmt(deg(ang(fzSel.z)),1)}°</span></div>
+    <div class="rline"><span>Zone 1 reach</span><span>${fmt(mag(zone.zone1),3)} Ω</span></div>
+    <div class="rline"><span>Zone 2 reach</span><span>${fmt(mag(zone.zone2),3)} Ω</span></div>
+    <div class="rline"><span>Zone 3 reach</span><span>${fmt(mag(zone.zone3),3)} Ω</span></div>
+  `;
+
+  const eq = errOn
+    ? `Z_{terukur}=Z_{asli}\\cdot\\frac{1-e_{PT}}{1-e_{CT}}=(${fmt(fzSel.zm.R,3)}+j${fmt(fzSel.zm.X,3)})\\,\\Omega`
+    : `Z_{apparent}=(${fmt(m.ZapparentS.R,3)}+j${fmt(m.ZapparentS.X,3)})\\,\\Omega`;
+  if(typeof katex==='function') katex.render(eq,$('formulaOut'),{displayMode:true,throwOnError:false});
+
+  const sirBox=$('sirNote');
+  if(m.SIR>4){ sirBox.style.background='var(--red-soft)'; sirBox.style.color='var(--red)'; sirBox.textContent='SIR tinggi (>4) — sensitivitas thd gangguan resistif menurun, khususnya Mho.'; }
+  else if(m.SIR>2){ sirBox.style.background='var(--copper-soft)'; sirBox.style.color='var(--copper)'; sirBox.textContent='SIR sedang (2–4) — perhatikan jangkauan resistif ujung saluran jauh.'; }
+  else { sirBox.style.background='var(--green-soft)'; sirBox.style.color='var(--green)'; sirBox.textContent='SIR rendah (<2) — kondisi baik, relay cukup sensitif thd gangguan resistif.'; }
+
+  $('typeNote').textContent=typeNotes[sel.charType];
+}
+
+/* ---------- zoom/pan (semantik jendela-data) ----------
+   k: 1 = fit. k>1 = zoom in (jendela menyempit, angka makin detail).
+   k<1 = zoom out (jendela melebar, angka menyesuaikan skala; kotak tetap linear penuh).
+   cx/cy = pusat jendela dlm koordinat data. */
+const plane=$('plane');
+const VBG=640,VBH2=470; // harus sama dgn renderPlane
+function resetView(){ S.ui.view={k:1,cx:undefined,cy:undefined}; render(); }
+$('zoomIn').addEventListener('click',()=>{ const v=S.ui.view; v.k=Math.min((v.k||1)*1.25,64); render(); });
+$('zoomOut').addEventListener('click',()=>{ const v=S.ui.view; v.k=Math.max((v.k||1)/1.25,0.12); render(); });
+$('zoomReset').addEventListener('click',resetView);
+plane.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const rect=plane.getBoundingClientRect();
+  const mx=(e.clientX-rect.left)/rect.width*VBG, my=(e.clientY-rect.top)/rect.height*VBH2;
+  const M=plane._map; if(!M) return;
+  const v=S.ui.view, k=v.k||1;
+  const spanRw=M.spanR/k, spanXw=M.spanX/k;
+  /* titik DATA di bawah kursor (pxToR/pxToX): wcx + frac·span − span/2 — TANPA offset */
+  const dR=v.cx + (mx-M.padL)/M.plotW*spanRw - spanRw/2;
+  const dX=v.cy - ((my-M.padT)/M.plotH*spanXw - spanXw/2);
+  const factor=e.deltaY<0?1.15:1/1.15;
+  const kNew=Math.max(0.12,Math.min(64,k*factor));
+  const spanRw2=M.spanR/kNew, spanXw2=M.spanX/kNew;
+  /* jaga titik data di bawah kursor tetap pada piksel yang sama (invarian zoom-anchor) */
+  v.cx=dR-( (mx-M.padL)/M.plotW-0.5 )*spanRw2;
+  v.cy=dX+( (my-M.padT)/M.plotH-0.5 )*spanXw2;
+  v.k=kNew;
+  render();
+},{passive:false});
+let panning=false,panStart=null;
+plane.addEventListener('pointerdown',e=>{ panning=true; panStart={x:e.clientX,y:e.clientY,cx:S.ui.view.cx,cy:S.ui.view.cy}; plane.style.cursor='grabbing'; });
+window.addEventListener('pointermove',e=>{ if(!panning)return; const rect=plane.getBoundingClientRect();
+  const M=plane._map; if(!M)return;
+  const v=S.ui.view, k=v.k||1;
+  const dRw=M.spanR/k/M.plotW*(e.clientX-panStart.x)*(rect.width/VBG);
+  const dXw=M.spanX/k/M.plotH*(e.clientY-panStart.y)*(rect.height/VBH2);
+  v.cx=panStart.cx-dRw; v.cy=panStart.cy+dXw;
+  render(); });
+window.addEventListener('pointerup',()=>{ panning=false; plane.style.cursor='grab'; });
+
+/* ---------- master render ---------- */
+function render(){
+  const m=computeModel();
+  const decisions={};
+  S.relays.forEach(r=>decisions[r.id]=r.enabled?decideRelay(r,m):{zone:0,time:null});
+  renderPlane(m,decisions);
+  renderSLD(m);
+  renderStaircase(m,decisions);
+  updateReadout(m,decisions);
+}
+
+/* ---------- init ---------- */
+buildRelayList();
+render();
+
+/* ---------- kunci tinggi panel parameter = tinggi kolom kanan (SLD → RX diagram) ---------- */
+/* Panel parameter jadi satu section scroll-sendiri; tingginya mengikuti .main (SLD + RX
+   + staircase). Sinkron via ResizeObserver agar tetap pas saat resize/collapse/render.
+   Di layar sempit (≤920px) kunci dilepas — CSS `height:auto!important` mengesampingkan
+   gaya inline, dan JS pun berhenti menulis tinggi. */
+(function(){
+  const panel=$('paramsPanel'), main=document.querySelector('.main');
+  if(!panel||!main) return;
+  const narrow=()=>matchMedia('(max-width:920px)').matches;
+  function sync(){
+    if(narrow()){ panel.style.height=''; return; }
+    const h=Math.round(main.getBoundingClientRect().height);
+    if(h>0) panel.style.height=Math.max(h,340)+'px';   // 340 = minimum tetap usable
+  }
+  sync();
+  new ResizeObserver(sync).observe(main);
+  addEventListener('resize',sync);
+  document.querySelectorAll('.card-h').forEach(hd=>hd.addEventListener('click',()=>setTimeout(sync,60)));
+})();
+</script>
+</body>
+</html>
