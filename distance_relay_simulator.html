@@ -87,7 +87,6 @@
 
   .main{display:flex;flex-direction:column;gap:16px;}
   .sld-card{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 16px 8px;}
-  #viToggle{position:absolute;top:7px;right:10px;z-index:3;padding:3px 9px;font-size:10.5px;}
 
   /* animasi aliran daya pada SLD — PANAH berjalan sepanjang saluran (animateMotion).
      Arah panah = arah aliran daya (rotate:auto). Jarak antar-panah lega agar mudah
@@ -117,7 +116,8 @@
   .status{border-radius:10px;padding:14px 15px;text-align:center;margin-bottom:12px;}
   .status .zlabel{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;letter-spacing:-.01em;}
   .status .tlabel{font-family:'JetBrains Mono',monospace;font-size:12px;margin-top:2px;}
-  .readout{flex:1;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ink);}
+  .readout{flex:1;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ink);overflow-y:auto;min-height:0;}
+  #sld{max-width:1200px;margin:0 auto;}   /* SLD tak raksasa di kolom sangat lebar */
   /* ringkasan dulu (kalimat 1 baris), lalu tabel teknis dlm 3 grup berjudul —
      tanpa pemisah putus-putus agar mata tak perlu membaca semua baris */
   .readout .r-sum{font-family:'Inter',sans-serif;font-size:12px;line-height:1.55;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 11px;}
@@ -141,10 +141,11 @@
      di bawah itu (layar kecil/pendek) kembali ke scroll halaman normal. ===== */
   @media (min-width:921px) and (min-height:600px){
     html,body{height:100%;overflow:hidden;}
+    #root{height:100%;}   /* wajib: #root tanpa tinggi membuat height:100% .wrap tak ter-resolusi */
     .wrap{height:100%;padding:10px 22px 12px;display:flex;flex-direction:column;}
     .topbar{flex:none;}
     .layout{flex:1;min-height:0;grid-template-columns:300px minmax(0,1fr);grid-template-rows:minmax(0,1fr);gap:14px;align-items:stretch;}
-    .layout>div{min-height:0;display:flex;flex-direction:column;}
+    .layout>div{min-height:0;overflow:hidden;display:flex;flex-direction:column;}
     .params-panel{height:auto!important;min-height:0;flex:1;}
     .main{overflow:hidden;}
     .sld-card{flex:none;}
@@ -349,7 +350,6 @@
     <div class="main">
 
       <div class="sld-card">
-        <button class="mini-btn on" id="viToggle" title="Tampilkan/sembunyikan tegangan bus & arus">V &amp; I: nyala</button>
         <svg id="sld" viewBox="0 0 980 130" width="100%" style="display:block;cursor:pointer;"></svg>
       </div>
 
@@ -454,7 +454,6 @@ let S={
     loadNow:84, loadAngNow:30,
     showZones:true, showLoad:true,
     faultType:'3ph', pos:50, rf:0, rfMode:'R', xf:0, infeed:1, infeedOn:true, ctErr:0, ptErr:0,
-    showVI:true,
     sideMode:'relay'   // kartu kanan: 'relay' = detail relay terpilih, 'seq' = urutan trip
   },
   relays:[
@@ -516,14 +515,6 @@ bindRange('vLL_kV','vLL_kV','',0);
 $('showZones').addEventListener('change',()=>{P.showZones=$('showZones').checked;render();});
 $('showLoad').addEventListener('change',()=>{P.showLoad=$('showLoad').checked;render();});
 
-/* tombol chip V & I di SLD: sembunyikan/tampilkan tegangan bus & arus */
-$('viToggle').addEventListener('click',()=>{
-  P.showVI=!P.showVI;
-  const b=$('viToggle');
-  b.textContent=P.showVI?'V & I: nyala':'V & I: mati';
-  b.classList.toggle('on',P.showVI);
-  render();
-});
 $('animateBtn').addEventListener('click',()=>{
   const btn=$('animateBtn');
   if(animTimer){ clearInterval(animTimer); animTimer=null; btn.textContent='▶ Animasikan sapuan gangguan'; btn.classList.remove('playing'); return; }
@@ -1125,7 +1116,7 @@ function renderSLD(m){
   const xB=xA+span*(P.l1/Math.max(totalKm,0.001));
   const faultX=xA+span*(P.pos/Math.max(totalKm,0.001));
   /* nilai V bus & arus gangguan — dihitung SELALU (dipakai panah aliran & chip V/I).
-     Chip V/I digambar hanya saat P.showVI; panah aliran selalu ∝ kA dari sini. */
+     Chip V/I SELALU tampil (tombol toggle #viToggle dihapus) & panah ∝ kA dari sini. */
   const vi=computeFaultCircuit(m);
   let s='';
   /* semua LABEL teks dikumpulkan di `lbl` dan dirender PALING AKHIR — teks tidak
@@ -1141,7 +1132,7 @@ function renderSLD(m){
   s+=`<line x1="${srcX}" y1="${y-13}" x2="${srcX}" y2="${y+13}" stroke="var(--blue)" stroke-width="3"/>`;
   s+=`<circle cx="${srcX}" cy="${y}" r="3.5" fill="var(--blue)"/>`;
   lbl+=`<text x="${srcX}" y="${y+22}" font-family="JetBrains Mono" font-size="10" fill="var(--ink-soft)" text-anchor="middle" style="${halo}">Sumber</text>`;
-  if(P.showVI) lbl+=`<text x="${srcX}" y="${y+31}" font-family="JetBrains Mono" font-size="9.5" fill="var(--red)" text-anchor="middle" font-weight="600" style="${halo}">I ${fmt(vi.currents.ia,1)} kA</text>`;
+  lbl+=`<text x="${srcX}" y="${y+31}" font-family="JetBrains Mono" font-size="9.5" fill="var(--red)" text-anchor="middle" font-weight="600" style="${halo}">I ${fmt(vi.currents.ia,1)} kA</text>`;
 
   /* bus = garis vertikal tebal (terhubung penuh, tanpa celah) */
   const bus=(x,label)=>`
@@ -1184,7 +1175,7 @@ function renderSLD(m){
   lbl+=`<text x="${xB}" y="${y-half-9}" font-family="JetBrains Mono" font-size="10.5" fill="var(--ink)" text-anchor="middle" font-weight="700" style="${halo}">Bus B</text>`;
   lbl+=`<text x="${xC}" y="${y-half-9}" font-family="JetBrains Mono" font-size="10.5" fill="var(--ink)" text-anchor="middle" font-weight="700" style="${halo}">Bus C</text>`;
   /* chip tegangan loop tiap bus (di atas garis, di bawah nama bus) */
-  if(P.showVI) [xA,xB,xC].forEach((bx,i)=>{
+  [xA,xB,xC].forEach((bx,i)=>{
     const b=vi.buses[['A','B','C'][i]];
     lbl+=`<text x="${bx}" y="${y-half-19}" font-family="JetBrains Mono" font-size="9.5" fill="var(--blue)" text-anchor="middle" font-weight="600" style="${halo}">${b.tag} ${Math.round(b.loopKv)} kV</text>`;
   });
@@ -1213,7 +1204,7 @@ function renderSLD(m){
     <line x1="${xB-10}" y1="${y+26.5}" x2="${xB+10}" y2="${y+26.5}" stroke="${gc1}" stroke-width="1.2"/>
     <line x1="${xB-10}" y1="${y+30}" x2="${xB+10}" y2="${y+30}" stroke="${gc1}" stroke-width="1.2"/>
   </g>`;
-  const infeedLbl=`Infeed ${gi?'on':'off'}`+(P.showVI&&gi?` · ${fmt(vi.currents.ib,1)} kA`:'');
+  const infeedLbl=`Infeed ${gi?'on':'off'}`+(gi?` · ${fmt(vi.currents.ib,1)} kA`:'');
   lbl+=`<text x="${xB+20}" y="${y+27}" font-family="JetBrains Mono" font-size="8.5" fill="${gi?'var(--blue)':'var(--line)'}" text-anchor="start" style="${halo}">${infeedLbl}</text>`;
 
   const ftLabel=P.faultType==='3ph'?'3φ':P.faultType==='phph'?'φ-φ':'φ-G';
@@ -1229,7 +1220,7 @@ function renderSLD(m){
     </g>`;
   lbl+=`<text x="${flx}" y="${y+42}" font-family="JetBrains Mono" font-size="10" fill="var(--red)" text-anchor="middle" font-weight="600" style="${halo}">${zfLabel}</text>`;
   /* arus gangguan total — baris sendiri DI BAWAH label jenis gangguan */
-  if(P.showVI) lbl+=`<text x="${flx}" y="${y+52}" font-family="JetBrains Mono" font-size="10" fill="var(--red)" text-anchor="middle" font-weight="600" style="${halo}">If ${fmt(vi.currents.ifK,1)} kA</text>`;
+  lbl+=`<text x="${flx}" y="${y+52}" font-family="JetBrains Mono" font-size="10" fill="var(--red)" text-anchor="middle" font-weight="600" style="${halo}">If ${fmt(vi.currents.ifK,1)} kA</text>`;
 
   /* ===== animasi aliran daya — per segmen dari flowSegments() (fisika radial) =====
      Setiap jalur memakai kA kontribusinya (ia / ib / ifK) → ukuran panah ∝ arus,

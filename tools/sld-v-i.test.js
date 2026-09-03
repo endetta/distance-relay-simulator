@@ -7,7 +7,8 @@
    Seam 1 (model): computeFaultCircuit(m) → {buses:{A,B,C:{loopKv}}, currents:{ia,ib,if}}
      loopKv: 3φ & φ-φ = |Vb−Vc| kV; φ-G = |Va| kV (loop yang diukur relay).
      currents: kA primer utk loop gangguan (3φ:I1, φ-φ:√3·I1, φ-G:3·I0).
-   Seam 2 (render): renderSLD memuat chip `V <kv> kV`, `I? <kA> kA` dgn toggle P.showVI.
+   Seam 2 (render): renderSLD memuat chip `V <kv> kV`, `I <kA> kA` — SELALU tampil
+   (tombol toggle #viToggle / P.showVI dihapus).
 */
 'use strict';
 const path = require('path');
@@ -75,7 +76,7 @@ check('model: tag loop sesuai tipe gangguan', () => {
   if (a.tag !== 'V' || b.tag !== 'Vbc' || c.tag !== 'Va') throw new Error(`tag salah: ${a.tag}/${b.tag}/${c.tag}`);
 });
 
-/* ============ Seam 2: chip di renderSLD + toggle P.showVI ============ */
+/* ============ Seam 2: chip di renderSLD (selalu tampil, tanpa toggle) ============ */
 check('sld [3φ ×1]: chip tegangan bus, arus sumber & If tampil', () => {
   const { sld } = scenario('3ph', true, 1);
   contains(sld, 'V 107 kV', 'chip bus');
@@ -92,15 +93,11 @@ check('sld [φ-G ×4]: chip Va (fasa) memakai nilai loop fasa', () => {
   const { sld } = scenario('phg', true, 4);
   contains(sld, 'Va 79 kV', 'chip bus B/C φ-G');
 });
-check('sld: toggle P.showVI=false menyembunyikan semua chip', () => {
+check('sld: chip V/I SELALU tampil — tombol toggle #viToggle & P.showVI dihapus', () => {
   const { ctx, sld } = scenario('3ph', true, 1);
-  contains(sld, 'V 107 kV', 'sebelum dimatikan');
-  ctx.pub.P.showVI = false;
-  ctx.pub.render();
-  const sld2 = ctx.els.sld.innerHTML;
-  notContains(sld2, 'kV<', 'chip tegangan harus hilang');
-  notContains(sld2, 'If ', 'If harus hilang');
-  notContains(sld2, '2.5 kA', 'arus harus hilang');
+  contains(sld, 'V 107 kV', 'chip bus tetap ada');
+  contains(sld, 'If 4.9 kA', 'If tetap ada');
+  if (ctx.pub.P.showVI !== undefined) throw new Error('P.showVI harus dihapus dari state (fitur toggle dibuang)');
 });
 
 console.log(`\n${passed} lulus, ${failed} gagal`);

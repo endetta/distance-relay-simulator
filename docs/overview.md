@@ -44,9 +44,9 @@ Buka file langsung di browser (`file:///`), atau `python -m http.server` / `npx 
 2. **State `S`** (dan `P=S.param`): panjang/`r`/`x` saluran L1/L2, CTR/PTR, Zs, VLL, beban,
    fault (`pos`,`rf`,`xf`,`rfMode`,`faultType`,`infeed`,`infeedOn`), error CT/PT, relay
    R1–R4 (`charType`, reach zona, timer), `selectedRelayId`, `showZones`, `showLoad`,
-   `showVI`, `ui.view` (zoom/pan).
+   `ui.view` (zoom/pan).
 3. **DOM bindings**: slider/checkbox/button → tulis `S` → `render()`. Ada tombol:
-   animasi sapuan gangguan (`#animateBtn`), `#viToggle` (chip V/I di SLD), collapse cards.
+   animasi sapuan gangguan (`#animateBtn`), collapse cards.
 4. **Model inti** (`computeModel`) + **zona & trip**: `relayZones`, `charShape` (satu-satunya
    sumber geometri zona), `pointIn`, `tripTest`, `decideRelay` (zona 1→2→3; keputusan
    memakai **Z terukur** `zm`, bukan Z apparent). `relayFaultZ` memberi `{behind,z,zm,zlPrim,…}`.
@@ -85,10 +85,10 @@ Buka file langsung di browser (`file:///`), atau `python -m http.server` / `npx 
   vertikal (viewBox 142 → 130, baris label atas/bawah dirapatkan).
 - **Scrollbar tipis**: `.params-panel` 6px, thumb pill rounded, track transparan
   (`scrollbar-width:thin` utk Firefox).
-- **Chip V & I di SLD**: tombol `#viToggle` (`P.showVI`, default true) mengontrol chip
-  tegangan per bus (`V/Vbc/Va … kV` di atas bus) dan arus (`I … kA` dekat Sumber,
-  `· … kA` di kapten Infeed, `If … kA` baris sendiri di bawah label jenis gangguan).
-  SLD `viewBox` kini `980×130`.
+- **Chip V & I di SLD (SELALU tampil)**: tombol `#viToggle`/`P.showVI` DIHAPUS (dulu
+  menghalangi pojok SLD). Chip tegangan per bus (`V/Vbc/Va … kV` di atas bus) dan arus
+  (`I … kA` dekat Sumber, `· … kA` di kapten Infeed, `If … kA` baris sendiri di bawah
+  label jenis gangguan) selalu digambar. SLD `viewBox` kini `980×130`.
 - **Animasi aliran SLD direvisi (sesi ini)**: fungsi murni `flowSegments(m, vi)` jadi
   satu-satunya sumber jalur & arus panah. Fault L1 → merah Sumber→fault = `ia`, copper
   B→fault = `ib` (infeed); fault L2 → merah Sumber→B = `ia` **saja** (artefak lama di mana
