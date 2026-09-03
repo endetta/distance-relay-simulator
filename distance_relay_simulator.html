@@ -757,10 +757,14 @@ function relayFaultZ(relay,m){
     else { const d=L1-pos; behind=d<0; zlineP=behind?scl(seg(pos-L1,P.r2,P.x2),-1):seg(d,P.r1,P.x1); }                        // B->A: L1
   } else {                             // Bus C, menghadap kiri ke B
     const d=(L1+L2)-pos; behind=d<0;
-    // fault di L2: sebagian L2; fault di L1: L2 penuh + sebagian L1 (jalur C→B→fault)
+    /* fault di L2: sebagian L2 (d dari C). Fault di L1: L2 PENUH + sisa L1 dari Bus B
+       ke arah A = L1−pos (jarak ke fault diukur dari sisi B, BUKAN dari A — pos dihitung
+       dari sumber A). Bug lama: seg(pos,…) membuat R4 membaca jarak pendek (mis. fault
+       di pos=30 terbaca 30 km L1, harusnya 70 km) → R4 salah zona (zone 2 utk fault yg
+       sebenarnya zone 3). */
     zlineP = behind ? scl(seg(d,P.r2,P.x2),-1)
            : pos>=L1 ? seg(d,P.r2,P.x2)
-                     : add(seg(L2,P.r2,P.x2), seg(pos,P.r1,P.x1));
+                     : add(seg(L2,P.r2,P.x2), seg(L1-pos,P.r1,P.x1));
   }
   /* fault di belakang relay: relay tetap MENGUKUR Z (terbalik, tanpa geseran Rf) —
      geometri karakteristik yang menolaknya; disimpan utk tampilan/readout */
@@ -1059,13 +1063,14 @@ function renderPlane(m,decisions){
   /* ======= KONTEN DATA (di-clip ke kotak plot) ======= */
   s+=`<g clip-path="url(#${cid})">`;
 
-  /* Lensa beban (overlay, TIDAK memengaruhi skala): sektor annular TERTUTUP.
-     Batas dalam = |Z| beban maksimum @0.85 pu V (kriteria loadability, PRC-023) —
-     lebih berat dari ini beban tak dapat ditransfer. Batas luar = |Z| beban ringan
-     (50% S maks @ 1.0 pu V). Sektor SATU SISI [0°, PF+margin]: beban yang dilihat
-     gardu induk transmisi adalah lagging (induktif, X>0) — daerah kapasitif (X<0)
-     bukan daerah operasi beban normal, makanya lensa MENEMPEL sumbu R dan tidak
-     terbelah simetris ke bawah. Daftar di antaranya = |Z| yang MUNGKIN saat sehat. */
+  /* Lensa beban (overlay, TIDAK memengaruhi skala): wedge SIMETRIS ±(pf+margin)
+     dgn 4 pojok difillet (hasil riset: area beban standar = region V/wedge; beban
+     boleh lagging ATAU leading). Batas dalam = |Z| beban maksimum @0.85 pu V
+     (PRC-023) — lebih berat dari ini beban tak dapat ditransfer. Batas luar = |Z|
+     beban ringan (50% S maks @ 1.0 pu V). Geometri dari loadRegion/loadRegionPoints
+     (fillet tangen busur & ray; fallback wedge tajam utk θ kecil). Di antara kedua
+     busur = |Z| yang MUNGKIN saat sehat — titik sistem normal (zlNow) berfluktuasi
+     di dalamnya. */
   let edgeHint='';
   if(P.showLoad){
     const la=rad(P.pfAngleDeg+P.loadEncroachDeg);
@@ -1495,7 +1500,7 @@ function updateReadout(m,decisions){
   $('statusBox').style.background=ZS[dec.zone];
   $('zoneLabel').style.color=ZC[dec.zone]; $('zoneLabel').textContent=`${sel.id}: ${zoneNames[dec.zone]}`;
   $('timeLabel').style.color=ZC[dec.zone];
-  $('timeLabel').textContent = dec.zone===0?'di luar seluruh zona': dec.zone===1?'waktu operasi: instantaneous':`waktu operasi: ${fmt(dec.time,2)} s`;
+  $('timeLabel').textContent = dec.zone===0?'di luar seluruh zona': dec.zone===1?'waktu operasi: seketika':`waktu operasi: ${fmt(dec.time,2)} s`;
 
   const fzSel=relayFaultZ(sel,m);
   const errOn=(P.ctErr!==0||P.ptErr!==0);
@@ -1534,9 +1539,11 @@ function updateReadout(m,decisions){
     </div>
   `;
 
+  /* rumus memakai frame RELAY TERPILIH (fzSel.z) — bukan ZapparentS yg frame-Bus-A
+     (tak cocok saat relay rev R3/R4 dipilih); konsisten dgn baris tabel. */
   const eq = errOn
     ? `Z_{terukur}=Z_{asli}\\cdot\\frac{1-e_{PT}}{1-e_{CT}}=(${fmt(fzSel.zm.R,3)}+j${fmt(fzSel.zm.X,3)})\\,\\Omega`
-    : `Z_{apparent}=(${fmt(m.ZapparentS.R,3)}+j${fmt(m.ZapparentS.X,3)})\\,\\Omega`;
+    : `Z_{apparent}=(${fmt(fzSel.z.R,3)}+j${fmt(fzSel.z.X,3)})\\,\\Omega`;
   if(typeof katex==='function') katex.render(eq,$('formulaOut'),{displayMode:true,throwOnError:false});
 
   const sirBox=$('sirNote');
@@ -1570,11 +1577,6 @@ function pinchZoomFactor(deltaY){
 /* Kanvas R–X kini ADAPTIF: renderPlane menggambar dgn ukuran elemen aktual (#plane
    clientWidth/Height) & menyetel viewBox = ukuran itu → koordinat internal 1:1 dgn px
    CSS, jadi handler cukup memakai offset kursor mentah (tak ada konstanta VBG/470 lagi). */
-const vbDims=()=>{
-  let w=640,h=470;
-  try{ const b=plane.viewBox.baseVal; if(b&&b.width){ w=b.width; h=b.height; } }catch(e){}
-  return {w,h};
-};
 function resetView(){ S.ui.view={k:1,cx:undefined,cy:undefined}; render(); }
 $('zoomIn').addEventListener('click',()=>{ const v=S.ui.view; v.k=Math.min((v.k||1)*1.25,64); render(); });
 $('zoomOut').addEventListener('click',()=>{ const v=S.ui.view; v.k=Math.max((v.k||1)/1.25,0.12); render(); });

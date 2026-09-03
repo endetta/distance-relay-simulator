@@ -74,9 +74,9 @@ console.log('\nSkenario 1 — fault di L1 dekat bus (pos=20) → R1 TRIP ZONE 1 
 {
   const { status, time, readout } = scenario((S, P) => { P.pos = 20; });
   assertStructure(readout, 'S1');
-  check('S1: statusBox zone 1 + instantaneous', () => {
+  check('S1: statusBox zone 1 + seketika', () => {
     contains(status, 'R1: TRIP \u2014 ZONE 1', 'S1 status');
-    contains(time, 'instantaneous', 'S1 status');
+    contains(time, 'seketika', 'S1 status');
   });
   check('S1: ringkasan menyebut Zona 1 & trip seketika', () => {
     contains(readout, '<b>Zona 1</b>', 'S1 summary');
@@ -136,6 +136,21 @@ console.log('\nSkenario 5 — Rf besar (40 \u03a9) di ujung L2 → TIDAK TRIP (d
   check('S5: ringkasan menyebut tidak trip + jangkauan terjauh', () => {
     contains(readout, 'tidak trip', 'S5 summary');
     contains(readout, 'terjauh', 'S5 summary');
+  });
+}
+
+console.log('\nSkenario 7 — R4 (Bus C) terpilih, fault di L1 (pos=30) → ZONA 3 t=1.20s');
+/* REGRESI bug audit: relayFaultZ R4 utk fault di L1 memakai pos (km dari A) padahal
+   jarak dari Bus B ke fault = L1−pos → dulu R4 membaca |Z| 3.24 Ω (ZONA 2) padahal
+   benar 4.42 Ω (ZONA 3). Perbaikan ini menjaga jarak R4->fault = L2 + (L1−pos). */
+{
+  const { status, time, readout } = scenario((S, P) => { S.selectedRelayId = 'R4'; P.pos = 30; });
+  check('S7: R4 TRIP ZONE 3 (bukan zone 2) t=1.20 s', () => {
+    contains(status, 'R4: TRIP \u2014 ZONE 3', 'S7 status');
+    contains(time, '1.20 s', 'S7 status');
+  });
+  check('S7: ringkasan menyebut Zona 3', () => {
+    contains(readout, 'masuk <b>Zona 3</b>', 'S7 summary');
   });
 }
 

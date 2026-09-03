@@ -88,6 +88,11 @@ Buka file langsung di browser (`file:///`), atau `python -m http.server` / `npx 
   tertutup, `dur=14s`): sumbu radial dari headroom jari-jari, sumbu tangensial dari
   headroom sudut → ellipse selalu DI DALAM lensa; label `sistem` ikut bergerak; fallback
   statis bila headroom habis. Lensa tetap overlay yang TIDAK memengaruhi skala.
+- **Audit bug — relayFaultZ R4 (Bus C, rev, L2) utk fault di L1**: cabang fault-di-L1
+  memakai `seg(pos,…)` (km dari A) padahal jarak dari Bus B ke fault = `L1−pos` → R4
+  membaca |Z| terlalu kecil (pos=30 → 3.24 Ω, salah ZONA 2; benar 4.42 Ω → ZONA 3).
+  Diperbaiki `seg(L1-pos,…)` + tes regresi S7 di readout.test.js. Gotcha: `pos` selalu
+  diukur dari sumber A (Bus A=0); jarak sisi-B ke fault di L1 = `L1−pos`.
 - **Kartu readout** (`.side-card`, `updateReadout`): kotak status → kalimat ringkasan `.r-sum`
   (bahasa manusia, angka kunci `<b>`) → tabel 2 grup berjudul (`Impedansi gangguan`,
   `Lokasi gangguan & jangkauan`; grup `Relay & karakteristik` DIHAPUS); baris
@@ -170,7 +175,7 @@ dan arus loop gangguan per sumber + total dalam kA primer. Uji literalnya ada di
 ## Validasi (tanpa build)
 
 ```bash
-node tools/readout.test.js     # 24 asersi kartu readout (2 grup)
+node tools/readout.test.js     # 26 asersi kartu readout (2 grup) + regresi R4 S7
 node tools/sld-v-i.test.js     # 14 asersi model V/I + chip SLD
 node tools/flow-anim.test.js   # 17 asersi panah aliran (flowSegments + #sld)
 node tools/side-mode.test.js   # 15 asersi mode dua-mode & pemangkasan layout
