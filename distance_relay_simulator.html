@@ -99,6 +99,10 @@
 
   .plane-card,.side-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
   .side-card{display:flex;flex-direction:column;}
+  .plane-card{position:relative;display:flex;flex-direction:column;min-height:0;}
+  /* toolbar zoom = OVERLAY di atas diagram (tak ada ruang putih khusus yg memakan tinggi) */
+  .plane-card .toolbar{position:absolute;top:8px;left:10px;right:10px;z-index:6;margin:0;}
+  .plane-card svg{display:block;margin:0 auto;}
   /* Kanvas diagram (SLD, R–X) + semua teks di dalamnya: non-selectable.
      Tanpa ini klik-ganda / drag-pan / seret-handle-gangguan ikut menyeleksi teks label
      (highlight biru) — mengganggu baca diagram. */
@@ -882,7 +886,12 @@ function flowSegments(m, vi){
 /* ---------- R-X plane (fit + zoom/pan + semua relay, koordinat global) ---------- */
 function renderPlane(m,decisions){
   const svg=$('plane');
-  const VBW=640,VBH=470,padL=38,padR=12,padT=10,padB=26;
+  /* kanvas ADAPTIF: gambar dgn ukuran elemen aktual agar diagram mengisi kartu hingga
+     legenda (fallback 640×470 utk stub tes tanpa layout). fitPlane menyetel style & viewBox
+     lalu render ulang saat ukuran berubah. */
+  const VBW=Math.round(svg.clientWidth)||640, VBH=Math.round(svg.clientHeight)||470;
+  /* padT=26: headroom atas utk toolbar zoom yg OVERLAY (judul sumbu X tak tertutup tombol) */
+  const padL=38,padR=12,padT=26,padB=26;
   const plotW=VBW-padL-padR, plotH=VBH-padT-padB;
   const view=S.ui.view;
 
@@ -1079,6 +1088,8 @@ function renderPlane(m,decisions){
   s+=`</g>`; // tutup clip
 
   svg.innerHTML=s;
+  /* viewBox = ukuran elemen → koordinat internal 1:1 dgn px CSS (grid & data penuh kartu) */
+  if(svg.setAttribute) svg.setAttribute('viewBox',`0 0 ${VBW} ${VBH}`);
   /* peta jendela utk handler zoom/pan (skala data saat ini) */
   svg._map={spanR,spanX,cx0,cy0,padL,padT,plotW,plotH};
   /* legenda marker gangguan: cincin hollow = lokasi asli, titik solid = masukan relay */
@@ -1412,7 +1423,21 @@ function updateReadout(m,decisions){
    k<1 = zoom out (jendela melebar, angka menyesuaikan skala; kotak tetap linear penuh).
    cx/cy = pusat jendela dlm koordinat data. */
 const plane=$('plane');
-const VBG=640,VBH2=470; // harus sama dgn renderPlane
+/* Faktor zoom roda LANDAI & proporsional jarak gulir (bukan 1.15× per event — trackpad
+   memicu banyak event kecil sehingga dulu terlalu sensitif). 100 px gulir = ×1.08;
+   deltaMode dinormalisasi: 0 piksel, 1 garis (≈16 px), 2 halaman (≈400 px). */
+function wheelZoomFactor(deltaY, deltaMode){
+  const px = deltaMode===1 ? deltaY*16 : deltaMode===2 ? deltaY*400 : deltaY;
+  return Math.pow(1.08, px/100);
+}
+/* Kanvas R–X kini ADAPTIF: renderPlane menggambar dgn ukuran elemen aktual (#plane
+   clientWidth/Height) & menyetel viewBox = ukuran itu → koordinat internal 1:1 dgn px
+   CSS, jadi handler cukup memakai offset kursor mentah (tak ada konstanta VBG/470 lagi). */
+const vbDims=()=>{
+  let w=640,h=470;
+  try{ const b=plane.viewBox.baseVal; if(b&&b.width){ w=b.width; h=b.height; } }catch(e){}
+  return {w,h};
+};
 function resetView(){ S.ui.view={k:1,cx:undefined,cy:undefined}; render(); }
 $('zoomIn').addEventListener('click',()=>{ const v=S.ui.view; v.k=Math.min((v.k||1)*1.25,64); render(); });
 $('zoomOut').addEventListener('click',()=>{ const v=S.ui.view; v.k=Math.max((v.k||1)/1.25,0.12); render(); });
@@ -1420,14 +1445,14 @@ $('zoomReset').addEventListener('click',resetView);
 plane.addEventListener('wheel',e=>{
   e.preventDefault();
   const rect=plane.getBoundingClientRect();
-  const mx=(e.clientX-rect.left)/rect.width*VBG, my=(e.clientY-rect.top)/rect.height*VBH2;
+  const mx=e.clientX-rect.left, my=e.clientY-rect.top;   // 1:1 dgn koordinat kanvas (viewBox=px)
   const M=plane._map; if(!M) return;
   const v=S.ui.view, k=v.k||1;
   const spanRw=M.spanR/k, spanXw=M.spanX/k;
   /* titik DATA di bawah kursor (pxToR/pxToX): wcx + frac·span − span/2 — TANPA offset */
   const dR=v.cx + (mx-M.padL)/M.plotW*spanRw - spanRw/2;
   const dX=v.cy - ((my-M.padT)/M.plotH*spanXw - spanXw/2);
-  const factor=e.deltaY<0?1.15:1/1.15;
+  const factor=wheelZoomFactor(e.deltaY, e.deltaMode||0);
   const kNew=Math.max(0.12,Math.min(64,k*factor));
   const spanRw2=M.spanR/kNew, spanXw2=M.spanX/kNew;
   /* jaga titik data di bawah kursor tetap pada piksel yang sama (invarian zoom-anchor) */
@@ -1441,8 +1466,8 @@ plane.addEventListener('pointerdown',e=>{ panning=true; panStart={x:e.clientX,y:
 window.addEventListener('pointermove',e=>{ if(!panning)return; const rect=plane.getBoundingClientRect();
   const M=plane._map; if(!M)return;
   const v=S.ui.view, k=v.k||1;
-  const dRw=M.spanR/k/M.plotW*(e.clientX-panStart.x)*(rect.width/VBG);
-  const dXw=M.spanX/k/M.plotH*(e.clientY-panStart.y)*(rect.height/VBH2);
+  const dRw=M.spanR/k/M.plotW*(e.clientX-panStart.x);
+  const dXw=M.spanX/k/M.plotH*(e.clientY-panStart.y);
   v.cx=panStart.cx-dRw; v.cy=panStart.cy+dXw;
   render(); });
 window.addEventListener('pointerup',()=>{ panning=false; plane.style.cursor='grab'; });
@@ -1490,15 +1515,23 @@ const lockH=()=>matchMedia('(min-width:921px) and (min-height:600px)').matches;
 function fitPlane(){
   const pc=document.querySelector('.plane-card'), svg=$('plane');
   if(!pc||!svg) return;
-  if(!lockH()){ svg.style.width=''; svg.style.height=''; return; } // kembali ke width:100%
-  const r=pc.getBoundingClientRect();
-  const tb=pc.querySelector('.toolbar'), lg=$('legend');
-  const hTb=tb?tb.getBoundingClientRect().height:0, hLg=lg?lg.getBoundingClientRect().height:0;
-  const avail=Math.max(200, r.height-hTb-hLg-46);   // 46 = padding kartu + jarak antar-baris
-  const w=Math.min(r.width-34, avail*VBG/VBH2);      // jaga rasio 640:470 (lingkaran tetap bulat)
-  const h=Math.round(w*VBH2/VBG);
-  svg.style.width=Math.round(w)+'px';
+  if(!lockH()){ svg.style.width=''; svg.style.height=''; resetPlaneView(); return; } // width:100%, tinggi rasio
+  const r=pc.getBoundingClientRect(), lg=$('legend');
+  const hLg=lg?lg.getBoundingClientRect().height+8:0; // + margin atas legenda
+  /* isi SELURUH ruang kartu di atas legenda (toolbar overlay — tak ada ruang khusus) */
+  const w=Math.max(260,Math.round(r.width-34));
+  const h=Math.max(200,Math.round(r.height-hLg-36));
+  svg.style.width=w+'px';
   svg.style.height=h+'px';
+  resetPlaneView();
+}
+/* render ulang hanya bila ukuran kanvas benar-benar berubah (mencegah loop observer) */
+function resetPlaneView(){
+  const svg=$('plane'); if(!svg) return;
+  const dims=(svg.style.width||'auto')+'x'+(svg.style.height||'auto');
+  if(svg._dims===dims) return;
+  svg._dims=dims;
+  render();
 }
 (function(){
   const panel=$('paramsPanel'), main=document.querySelector('.main');

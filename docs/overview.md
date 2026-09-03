@@ -35,6 +35,7 @@ Buka file langsung di browser (`file:///`), atau `python -m http.server` / `npx 
 | `tools/sld-v-i.test.js` | Tes model V/I + chip SLD. Jalankan: `node tools/sld-v-i.test.js`. |
 | `tools/flow-anim.test.js` | Tes revisi animasi aliran SLD (`flowSegments` + geometri panah). Jalankan: `node tools/flow-anim.test.js`. |
 | `tools/side-mode.test.js` | Tes pemangkasan layout & mode dua-mode kartu kanan (`tripSequence` + `P.sideMode`). Jalankan: `node tools/side-mode.test.js`. |
+| `tools/plane-zoom.test.js` | Tes zoom roda landai (`wheelZoomFactor`) & kanvas R–X adaptif. Jalankan: `node tools/plane-zoom.test.js`. |
 | `design-plans/` | Arsip design plan; yang ada berlabel **OBSOLETE** — jangan dieksekusi. |
 
 ## Arsitektur isi file HTML (urut dalam `<script>`)
@@ -83,6 +84,10 @@ Buka file langsung di browser (`file:///`), atau `python -m http.server` / `npx 
 - **SLD compact & simetris (sesi ini)**: blok isi SLD dipusatkan kiri–kanan berbasis
   tinta (sumber 75 → Bus A 145 … Bus C 905, gutter ≈53 px tiap sisi) & dirapatkan
   vertikal (viewBox 142 → 130, baris label atas/bawah dirapatkan).
+- **Kanvas R–X full-kartu & zoom roda landai (sesi ini)**: toolbar zoom (−/+/Fit) overlay
+  di atas plot (tanpa ruang putih khusus); `renderPlane` adaptif thd ukuran kanvas
+  (viewBox = ukuran elemen, 1:1 px); `fitPlane` mengisi kartu s.d. legenda. Zoom roda
+  `wheelZoomFactor`: ±8% per 100 px gulir (trackpad tak lagi 1.15× per event).
 - **Scrollbar tipis**: `.params-panel` 6px, thumb pill rounded, track transparan
   (`scrollbar-width:thin` utk Firefox).
 - **Chip V & I di SLD (SELALU tampil)**: tombol `#viToggle`/`P.showVI` DIHAPUS (dulu
@@ -119,9 +124,12 @@ dan arus loop gangguan per sumber + total dalam kA primer. Uji literalnya ada di
 - **Label SLD/R–X**: semua teks dikumpulkan ke string `lbl` dan dirender **paling akhir**
   dengan halo `paint-order:stroke;stroke:var(--surface)`. Jangan pernah menaruh teks
   sebelum garis/panah — bug lama label tertimpa.
-- **Zoom/pan plane**: konstanta `VBG=640,VBH2=470` di handler **harus sama** dgn `VBW/VBH`
-  di `renderPlane`, dan atribut `viewBox` svg ikut — kalau tidak, koordinat kursor divergen.
-  Begitu juga `viewBox` SLD harus sinkron dgn `VBH` di `renderSLD`.
+- **Zoom/pan plane (adaptif)**: `renderPlane` membaca ukuran elemen aktual
+  (`clientWidth/Height`, fallback 640×470 utk tes) dan menyetel `viewBox` = ukuran itu,
+  jadi koordinat internal 1:1 dgn px CSS — handler wheel/pan memakai offset kursor mentah
+  (tidak ada pasangan konstanta VBG/VBH2 lagi). Toolbar zoom overlay di atas plot
+  (`padT=26`); zoom roda = `wheelZoomFactor` ±8% per 100 px gulir. `viewBox` SLD harus
+  sinkron dgn `VBH` di `renderSLD`.
 - **Skala bidang R–X** dari bounding box zona + titik fault relay aktif, **bukan** dari
   lensa beban (lensa overlay full-canvas; memakainya utk skala merusak grid).
 - Warna pakai variabel tema `:root` (`--blue/--copper/--ink/-soft`, `--teal`,
@@ -136,6 +144,7 @@ node tools/readout.test.js   # 24 asersi kartu readout (2 grup)
 node tools/sld-v-i.test.js   # 14 asersi model V/I + chip SLD
 node tools/flow-anim.test.js # 17 asersi panah aliran (flowSegments + #sld)
 node tools/side-mode.test.js # 15 asersi mode dua-mode & pemangkasan layout
+node tools/plane-zoom.test.js # 11 asersi zoom roda & kanvas adaptif
 ```
 
 Harness mengabaikan CSS & tidak punya hirarki DOM anak — teks status readout dibaca dari
