@@ -1,7 +1,13 @@
 # Tombol aliran daya menampilkan label yang cocok dengan state awal
 
+> **⚠ OBSOLETE (2026-09-03):** plan ini sudah tidak dapat diterapkan — tombol targetnya
+> `#flowToggle` **sudah dihapus dari kode**: animasi aliran daya kini SELALU tampil tanpa
+> tombol (lihat komentar "aliran daya pada SLD" di `distance_relay_simulator.html` ~baris 432).
+> Diarsipkan apa adanya sebagai rekam jejak audit; jangan dieksekusi.
+
 Written against: unavailable (folder bukan repositori git; audit 2026-09-03 terhadap
 `distance_relay_simulator.html` di `C:\Users\pcelr\Documents\Sheva\SHEVA'S SIMULATOR LIBRARY\New folder\`)
+
 
 ## Evidence chain
 

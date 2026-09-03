@@ -30,10 +30,12 @@
 
   /* wadah parameter: satu parent section dgn scroll sendiri, tinggi dikunci
      seukuran kolom kanan (SLD → RX diagram) oleh JS. Di layar sempit dilepas. */
-  .params-panel{display:flex;flex-direction:column;gap:14px;overflow-y:auto;scrollbar-gutter:stable;padding:2px 3px 2px 0;}
+  .params-panel{display:flex;flex-direction:column;gap:14px;overflow-y:auto;scrollbar-gutter:stable;padding:2px 3px 2px 0;
+    scrollbar-width:thin;scrollbar-color:var(--line) transparent;} /* Firefox: scrollbar tipis standar */
   .params-panel .card{margin-bottom:0;}
-  .params-panel::-webkit-scrollbar{width:8px;}
-  .params-panel::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px;}
+  .params-panel::-webkit-scrollbar{width:6px;}
+  .params-panel::-webkit-scrollbar-track{background:transparent;}
+  .params-panel::-webkit-scrollbar-thumb{background:var(--line);border-radius:10px;}
   .params-panel::-webkit-scrollbar-thumb:hover{background:var(--blue-soft);}
   @media(max-width:920px){.params-panel{height:auto!important;overflow:visible;scrollbar-gutter:auto;}}
 
@@ -103,9 +105,17 @@
   .status .zlabel{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;letter-spacing:-.01em;}
   .status .tlabel{font-family:'JetBrains Mono',monospace;font-size:12px;margin-top:2px;}
   .readout{flex:1;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ink);}
-  .readout .rline{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--line);}
-  .readout .rline:last-child{border-bottom:none;}
-  .readout .rline span:first-child{color:var(--ink-soft);}
+  /* ringkasan dulu (kalimat 1 baris), lalu tabel teknis dlm 3 grup berjudul —
+     tanpa pemisah putus-putus agar mata tak perlu membaca semua baris */
+  .readout .r-sum{font-family:'Inter',sans-serif;font-size:12px;line-height:1.55;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 11px;}
+  .readout .r-sum b{font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--blue);white-space:nowrap;}
+  .readout .rgroup{margin-top:11px;}
+  .readout .rgroup-title{display:flex;align-items:center;gap:8px;font-family:'Space Grotesk',sans-serif;font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:2px;}
+  .readout .rgroup-title::after{content:'';flex:1;height:1px;background:var(--line);}
+  .readout .rline{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:3px 0;}
+  .readout .rline span:first-child{color:var(--ink-soft);font-family:'Inter',sans-serif;font-size:11px;flex:none;}
+  .readout .rline.key span:last-child{font-weight:600;color:var(--ink);}
+  .readout .rline span:last-child{text-align:right;}
   .formula-box{margin-top:6px;overflow-x:auto;padding:4px 0;}
   .sir-note{font-size:11px;margin-top:8px;padding:8px 10px;border-radius:7px;}
 
@@ -546,10 +556,13 @@ function computeModel(){
      dikonversi ke Ω sekunder agar konsisten dengan bidang R-X & zona relay */
   const Vv=P.vLL_kV*1000, Sv=P.loadMVA*1e6;
   const loadzMin=0.85*(Vv*Vv)/Sv*conv;
-  /* Lensa beban: batas dalam = |Z| beban MAKSIMUM @0.85 pu V (kriteria loadability),
-     batas luar = |Z| beban 20% S maks (sistem ringan). Titik operasi pra-gangguan:
-     beban aktual loadNow @ tegangan normal 1.0 pu — "di mana sistem berada" saat sehat. */
-  const loadzNom=loadzMin*5;
+  /* Lensa beban: batas dalam = |Z| beban MAKSIMUM @0.85 pu V (kriteria loadability
+     PRC-023). Batas luar = |Z| beban RINGAN — 50% S maks pada tegangan normal 1.0 pu
+     (≈2.35× batas dalam); beban lebih ringan dari itu |Z|-nya menjauh bebas dan tak
+     lagi relevan bagi keamanan zona (PRC-023 hanya mewajibkan no-trip s.d. 150% rating).
+     Titik operasi pra-gangguan: beban aktual loadNow @ tegangan normal 1.0 pu —
+     "di mana sistem berada" saat sehat. */
+  const loadzNom=(Vv*Vv)/(0.5*Sv)*conv;
   const zlNowMag=(Vv*Vv)/(Math.max(P.loadNow,1)*1e6)*conv;
   const thNow=rad(P.loadAngNow);
   const zlNow=C(zlNowMag*Math.cos(thNow), zlNowMag*Math.sin(thNow));
@@ -746,15 +759,18 @@ function renderPlane(m,decisions){
   /* Lensa beban (overlay, TIDAK memengaruhi skala): sektor annular TERTUTUP.
      Batas dalam = |Z| beban maksimum @0.85 pu V (kriteria loadability, PRC-023) —
      lebih berat dari ini beban tak dapat ditransfer. Batas luar = |Z| beban ringan
-     (20% S maks). Daftar di antaranya = seluruh |Z| yang MUNGKIN pada operasi normal sehat. */
+     (50% S maks @ 1.0 pu V). Sektor SATU SISI [0°, PF+margin]: beban yang dilihat
+     gardu induk transmisi adalah lagging (induktif, X>0) — daerah kapasitif (X<0)
+     bukan daerah operasi beban normal, makanya lensa MENEMPEL sumbu R dan tidak
+     terbelah simetris ke bawah. Daftar di antaranya = |Z| yang MUNGKIN saat sehat. */
   let edgeHint='';
   if(P.showLoad){
     const la=rad(P.pfAngleDeg+P.loadEncroachDeg);
     const rIn=m.loadzMin, rOut=m.loadzNom;
-    const a1=-la, a2=+la;
+    const a1=0, a2=+la;   // menempel sumbu R; seluruhnya di kuadran induktif
     const I1=toPx(C(rIn*Math.cos(a1), rIn*Math.sin(a1))), I2=toPx(C(rIn*Math.cos(a2), rIn*Math.sin(a2)));
     const E1=toPx(C(rOut*Math.cos(a1), rOut*Math.sin(a1))), E2=toPx(C(rOut*Math.cos(a2), rOut*Math.sin(a2)));
-    s+=`<path d="M ${I1.x} ${I1.y} A ${rIn*scale} ${rIn*scale} 0 0 1 ${I2.x} ${I2.y} L ${E2.x} ${E2.y} A ${rOut*scale} ${rOut*scale} 0 0 0 ${E1.x} ${E1.y} Z" fill="var(--green)" opacity="0.07" stroke="var(--green)" stroke-width="1.2" stroke-dasharray="5 4"/>`;
+    s+=`<path d="M ${I1.x} ${I1.y} L ${E1.x} ${E1.y} A ${rOut*scale} ${rOut*scale} 0 0 0 ${E2.x} ${E2.y} L ${I2.x} ${I2.y} A ${rIn*scale} ${rIn*scale} 0 0 1 ${I1.x} ${I1.y} Z" fill="var(--green)" opacity="0.07" stroke="var(--green)" stroke-width="1.2" stroke-dasharray="5 4"/>`;
     s+=`<text x="${padL+plotW-6}" y="${padT+10}" font-family="JetBrains Mono" font-size="9" fill="var(--green)" text-anchor="end">lensa beban (${fmt(rIn,1)}–${fmt(rOut,1)} Ω)</text>`;
     /* titik operasi pra-gangguan: Z = V²/S(beban aktual) pada sudut beban aktual.
        Dinamis — bergeser setiap beban/sudut normal digeser. Berdenyut agar mudah ditemukan. */
@@ -1144,18 +1160,42 @@ function updateReadout(m,decisions){
   const fzSel=relayFaultZ(sel,m);
   const errOn=(P.ctErr!==0||P.ptErr!==0);
   const errDelta=mag(fzSel.z)-mag(fzSel.zm);
+  const zc=c=>fmt(c.R,3)+' + j'+fmt(c.X,3)+' Ω';                       // format kompleks sekunder/primer
+  const reach=[1,2,3].map(n=>fmt(mag(zone['zone'+n]),3));             // |zona| sekunder utk ringkasan & baris
+  const zHead=errOn?'Z terukur':'|Z|';                                // basis keputusan selalu Z terukur (zm)
+  const zmag=fmt(mag(fzSel.zm),3);
+  const behindNote=fzSel.behind?' (di belakang)':'';
+  /* Kalimat ringkasan: 1 baris bahasa manusia + angka kunci; detail di bawahnya. */
+  let summary;
+  if(fzSel.behind) summary='Gangguan berada <b>di belakang relay</b> — tidak boleh trip.';
+  else if(dec.zone===0) summary=`Relay melihat <b>${zHead} ${zmag} Ω</b> — melebihi jangkauan semua zona (terjauh <b>${reach[2]} Ω</b>) → <b>tidak trip</b>.`;
+  else if(dec.zone===1) summary=`Relay melihat <b>${zHead} ${zmag} Ω</b> — di dalam <b>Zona 1</b> (batas <b>${reach[0]} Ω</b>) → <b>trip seketika</b>.`;
+  else summary=`Relay melihat <b>${zHead} ${zmag} Ω</b> — melewati Zona ${dec.zone-1} (${reach[dec.zone-2]} Ω), masuk <b>Zona ${dec.zone}</b> (${reach[dec.zone-1]} Ω) → <b>trip ${fmt(dec.time,2)} s</b>.`;
+  const errRows=errOn
+    ? `<div class="rline"><span>Z terukur (CT${P.ctErr>0?'+':''}${fmt(P.ctErr,1)}% / PT${P.ptErr>0?'+':''}${fmt(P.ptErr,1)}%)</span><span>${zc(fzSel.zm)}${behindNote}</span></div>
+      <div class="rline"><span>Δ|Z| error</span><span>${errDelta>=0?'−':'+'}${fmt(Math.abs(errDelta),3)} Ω (${errDelta>0?'overreach':errDelta<0?'underreach':'—'})</span></div>`
+    : '';
+  /* Z apparent (primer) hanya ditampilkan bila berbeda dari Z asli (ada Rf/infeed) */
+  const apparentRow=(mag(sub(fzSel.zlPrim,fzSel.zPrim))>1e-9)
+    ? `<div class="rline"><span>Z apparent (primer)</span><span>${zc(fzSel.zPrim)}${behindNote}</span></div>` : '';
   $('readout').innerHTML=`
-    <div class="rline"><span>Relay</span><span>${sel.name}</span></div>
-    <div class="rline"><span>Karakteristik</span><span>${sel.charType}</span></div>
-    <div class="rline"><span>Z asli (saluran, primer)</span><span>${fmt(fzSel.zlPrim.R,2)} + j${fmt(fzSel.zlPrim.X,2)} Ω${fzSel.behind?' (di belakang)':''}</span></div>
-    <div class="rline"><span>Z apparent (primer)</span><span>${fmt(fzSel.zPrim.R,2)} + j${fmt(fzSel.zPrim.X,2)} Ω${fzSel.behind?' (di belakang)':''}</span></div>
-    <div class="rline"><span>Z apparent (sekunder)</span><span>${fmt(fzSel.z.R,3)} + j${fmt(fzSel.z.X,3)} Ω${fzSel.behind?' (di belakang)':''}</span></div>
-    ${errOn?`<div class="rline"><span>Z terukur (CT${P.ctErr>0?'+':''}${fmt(P.ctErr,1)}% / PT${P.ptErr>0?'+':''}${fmt(P.ptErr,1)}%)</span><span>${fmt(fzSel.zm.R,3)} + j${fmt(fzSel.zm.X,3)} Ω</span></div>
-    <div class="rline"><span>Δ|Z| error</span><span>${errDelta>=0?'−':'+'}${fmt(Math.abs(errDelta),3)} Ω (${errDelta>0?'overreach':errDelta<0?'underreach':'—'})</span></div>`:''}
-    <div class="rline"><span>|Z| ∠θ</span><span>${fmt(mag(fzSel.z),3)} Ω ∠${fmt(deg(ang(fzSel.z)),1)}°</span></div>
-    <div class="rline"><span>Zone 1 reach</span><span>${fmt(mag(zone.zone1),3)} Ω</span></div>
-    <div class="rline"><span>Zone 2 reach</span><span>${fmt(mag(zone.zone2),3)} Ω</span></div>
-    <div class="rline"><span>Zone 3 reach</span><span>${fmt(mag(zone.zone3),3)} Ω</span></div>
+    <div class="r-sum">${summary}</div>
+    <div class="rgroup"><div class="rgroup-title">Relay &amp; karakteristik</div>
+      <div class="rline"><span>Relay</span><span>${sel.name}</span></div>
+      <div class="rline"><span>Karakteristik</span><span>${sel.charType}</span></div>
+    </div>
+    <div class="rgroup"><div class="rgroup-title">Impedansi gangguan</div>
+      <div class="rline key"><span>Z apparent (sekunder)</span><span>${zc(fzSel.z)}${behindNote}</span></div>
+      <div class="rline"><span>|Z| ∠θ</span><span>${fmt(mag(fzSel.z),3)} Ω ∠${fmt(deg(ang(fzSel.z)),1)}°</span></div>
+      ${errRows}
+    </div>
+    <div class="rgroup"><div class="rgroup-title">Lokasi gangguan &amp; jangkauan</div>
+      <div class="rline"><span>Z asli (primer)</span><span>${zc(fzSel.zlPrim)}${behindNote}</span></div>
+      ${apparentRow}
+      <div class="rline"><span>Reach zona 1</span><span>${reach[0]} Ω</span></div>
+      <div class="rline"><span>Reach zona 2</span><span>${reach[1]} Ω</span></div>
+      <div class="rline"><span>Reach zona 3</span><span>${reach[2]} Ω</span></div>
+    </div>
   `;
 
   const eq = errOn

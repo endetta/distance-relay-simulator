@@ -20,6 +20,8 @@ npx serve
 
 There is no lint/build/test command. The JS **can** run outside the browser via a small Node mock-DOM harness (see `/tmp/diag3.js`, `/tmp/measure.js` for the pattern): stub `document`/`window` with elements that capture `innerHTML`, then run the `<script>` body with `new Function(code + ';global.__pub={render,S,P,computeModel};')()`, and regex-measure the generated `#plane` SVG. This is the pixel-level validation loop for the R–X plane (label placement, zoom anchor invariance, extreme pan, no-NaN). The seam under test is the generated SVG string — what the browser actually draws.
 
+In-repo harness & tests: `tools/lens-harness.js` stubs the DOM and exports `{render,S,P,computeModel,…}` plus captured elements (`els.<id>.innerHTML`/`textContent`); `tools/readout.test.js` uses it to verify the readout/status card (`.side-card`) — summary sentence `.r-sum`, 3 group titles & row labels of `#readout`, and `#zoneLabel`/`#timeLabel` texts across trip/behind/no-trip/CT-PT-error scenarios. Run with `node tools/readout.test.js`. Both hard-code the HTML filename in their `fs.readFileSync`/`HTML` path — update if the file is ever renamed.
+
 ## Architecture
 
 The whole program is one `<script>` block, organized into these logical sections (in file order):
@@ -28,7 +30,7 @@ The whole program is one `<script>` block, organized into these logical sections
 
 2. **Global state** — a single object `S` holds every parameter (line lengths/`r1`/`x1`, CTR/PTR, relay characteristic & RCA offset & R-reach multiplier, zones/load toggles, fault type/position/`Rf`/infeed, zone-2/3 times). All UI controls write into `S`; nothing else holds mutable state.
 
-3. **DOM bindings** — `bindRange(id, key)` and `setupGroup(groupId, key)` wire sliders, buttons, and checkboxes to `S`. Every control change calls `onParamChange()` (which clamps fault position to line length) → `render()`. This is a purely reactive loop: mutate `S`, call `render()`.
+3. **DOM bindings** — `bindRange(id, key, suffix, dec)` and `setupGroup(groupId, fn)` (the callback receives the clicked button's `b.dataset.v`) wire sliders, buttons, and checkboxes to `S`. Every control change calls `onParamChange()` (which clamps fault position to line length) → `render()`. This is a purely reactive loop: mutate `S`, call `render()`.
 
 4. **Core electrical model** — `computeModel()` is the single source of truth for all derived values. The model is **relay-centric** (4 relays R1–R4), each with a `bus` (A/B/C), a `direction` (`'fwd'`|`'rev'`), a `lineRef` (`'L1'`|`'L2'`), and per-relay reach/timing under `relay.z1Reach`/`z2Reach`/`t2`/`t3`/`rcaOffset`/`qrm`/`charType`. Key conventions to know before editing anything:
    - Line impedance **Z** is computed from per-km `r`/`x` × length (primary Ω), then converted to **secondary Ω** with `conv = CTR / PTR`.
@@ -38,15 +40,16 @@ The whole program is one `<script>` block, organized into these logical sections
    - **SIR** (source impedance ratio) = `|Zs| / |Z1p|`; drives the sensitivity note.
    - `tau = lineAngle + rcaOffset` orients the Mho circle.
 
-5. **Trip decision** — `tripTest(relay, z, zn, zones, lineAngle)` returns true if **measured** Z falls inside a zone's characteristic shape; `relayFaultZ` computes the measured fault Z relative to the relay's bus and returns `{behind, z, zm, zl, ...}` (`behind` → no trip); `decideRelay(relay, m)` checks zones in order 1→2→3 and returns `{zone, time}` (`zone: 0` means no trip). Characteristic shapes:
+5. **Trip decision** — `tripTest(relay, z, zn, zones, m)` returns true if **measured** Z falls inside a zone's characteristic shape; `relayFaultZ` computes the measured fault Z relative to the relay's bus and returns `{behind, z, zm, zl, ...}` (`behind` → no trip); `decideRelay(relay, m)` checks zones in order 1→2→3 and returns `{zone, time}` (`zone: 0` means no trip). Characteristic shapes:
    - **impedance**: circle centered at origin, `|z| ≤ |zn|`, plus a forward-direction check (`forwardOK`) on the line angle.
    - **reactance**: a band on `X` (`z.X ≤ zn.X`), bounded by the zone-3 reach for R.
    - **mho**: circle passing through origin, diameter along `tau`.
    - **quadrilateral**: rectangle `R ∈ [0, zn.X×qrm]`, `X ∈ [0, zn.X]`.
+   - **Characteristic module — the single source of zone geometry**: `charShape(relay, zn, zones, m)` → `{kind:'circle', c, r, dir?}` | `{kind:'rect', c1, c2}`; `pointIn(shape, z)` tests points; `shapeBounds(shape)` gives the plot bounding box. All shape constants (impedance non-directional `dir` check, reactance blinder `1.3×zone3`, mho center = reach/2 along `tau`, quad R-reach = `zn.X×qrm`) are written ONCE here. `tripTest`, the `grow()` bounding pass in `renderPlane`, and `shapeSVG` all consume these — never duplicate zone geometry elsewhere. The mho/impedance angle follows the relay's `lineRef` (L1 → `m.lineAngle`, L2 → `ang(m.Z2)`) plus `rcaOffset`.
 
 6. **Rendering** — four independent pure functions that each build an SVG string from `m` (model) and `dec` (decision) and set `innerHTML`:
    - `renderPlane(m, dec)` — the R–X diagram (see *Rx diagram notes* below).
-   - `renderSLD(m)` — buses are thick vertical lines with relay boxes floating beside them (no arrows, no drop lines); a grid/infeed symbol below Bus B toggles `P.infeedOn` and stays in sync with its checkbox. The fault handle drags along the line (updates `S.pos`).
+   - `renderSLD(m)` — buses are thick vertical lines with relay boxes floating beside them (no arrows, no drop lines); a grid/infeed symbol below Bus B toggles `P.infeedOn` and stays in sync with its checkbox. The fault handle drags along the line (updates `S.pos`). All text is collected into the `lbl` string and appended LAST, each label carrying a paint-order halo — labels must never be buried under channel lines, fault arrows, or flow dashes (a past bug). The flow animation (red source→fault arrows, copper infeed→fault, nothing past the fault, bigger arrows for combined source+infeed current on L2 faults) is ALWAYS drawn — there is no toggle button; it re-renders with the fault position on every render.
    - `renderStaircase(m, dec)` — time–impedance (time–distance) steps for the selected relay.
    - `updateReadout(m, dec)` — status box, readout table, KaTeX formula, SIR note, and the per-characteristic explanatory note (`typeNotes`).
 
