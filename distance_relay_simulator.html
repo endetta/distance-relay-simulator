@@ -100,8 +100,14 @@
   .plane-card,.side-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
   .side-card{display:flex;flex-direction:column;}
   .plane-card{position:relative;display:flex;flex-direction:column;min-height:0;}
-  /* toolbar zoom = OVERLAY di atas diagram (tak ada ruang putih khusus yg memakan tinggi) */
-  .plane-card .toolbar{position:absolute;top:8px;left:10px;right:10px;z-index:6;margin:0;}
+  /* toolbar zoom = chip melayang DI DALAM pojok kanan-atas plot (menindih grid/kurva,
+     bukan band putih terpisah di luar diagram). Container tak menangkap pointer — hanya
+     tombolnya yg pointer-events:auto — supaya pan/drag pd area kosong tetap jalan.
+     Radius chip 12px mengikuti radius kartu, latar semi-transparan agar grid tetap
+     terbaca di bawahnya. */
+  .plane-card .toolbar{position:absolute;top:32px;right:16px;left:auto;width:auto;z-index:6;margin:0;pointer-events:none;}
+  .plane-card .toolbar .mini-btn{pointer-events:auto;background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:12px;box-shadow:0 1px 4px rgba(22,35,58,.14);padding:3px 11px;font-size:11px;font-weight:500;color:var(--ink-soft);}
+  .plane-card .toolbar .mini-btn:hover{border-color:var(--blue);color:var(--blue);}
   .plane-card svg{display:block;margin:0 auto;}
   /* Kanvas diagram (SLD, R–X) + semua teks di dalamnya: non-selectable.
      Tanpa ini klik-ganda / drag-pan / seret-handle-gangguan ikut menyeleksi teks label
@@ -890,8 +896,9 @@ function renderPlane(m,decisions){
      legenda (fallback 640×470 utk stub tes tanpa layout). fitPlane menyetel style & viewBox
      lalu render ulang saat ukuran berubah. */
   const VBW=Math.round(svg.clientWidth)||640, VBH=Math.round(svg.clientHeight)||470;
-  /* padT=26: headroom atas utk toolbar zoom yg OVERLAY (judul sumbu X tak tertutup tombol) */
-  const padL=38,padR=12,padT=26,padB=26;
+  /* padT=14: headroom kecil atas utk judul sumbu X & label — toolbar zoom kini chip
+     yg melayang DI DALAM plot (pojok kanan-atas), tak lagi band yg memakan tinggi */
+  const padL=38,padR=12,padT=14,padB=26;
   const plotW=VBW-padL-padR, plotH=VBH-padT-padB;
   const view=S.ui.view;
 
@@ -917,6 +924,11 @@ function renderPlane(m,decisions){
   if(spanR/spanX<targetRatio){const extra=spanX*targetRatio-spanR; maxR+=extra*0.85; minR-=extra*0.15;}
   else{const extra=spanR/targetRatio-spanX; maxX+=extra;}
   spanR=maxR-minR; spanX=maxX-minX;
+  /* Jendela default DIPERLEBAR: kedua sumbu ×1.26 (margin kiri–kanan lega & rata).
+     Kedua span dikalikan bersama → rasio sumbu tak berubah, lingkaran tetap bulat;
+     window tetap berpusat di origin (0,0) sehingga kurva tampak seimbang. */
+  const WIDE=1.26;
+  spanR*=WIDE; spanX*=WIDE;
   const cx0=(minR+maxR)/2, cy0=(minX+maxX)/2;   // pusat data
   /* ZOOM = jendela data. k: 1=jendela ~span data; <1=jendela LUAS (thumbnail, angka
      mengecil, kotak tetap penuh & linear); >1=jendela sempit (detail angka). Pusat
@@ -1424,11 +1436,20 @@ function updateReadout(m,decisions){
    cx/cy = pusat jendela dlm koordinat data. */
 const plane=$('plane');
 /* Faktor zoom roda LANDAI & proporsional jarak gulir (bukan 1.15× per event — trackpad
-   memicu banyak event kecil sehingga dulu terlalu sensitif). 100 px gulir = ×1.08;
+   memicu banyak event kecil sehingga dulu terlalu sensitif). 100 px gulir = ×1.15;
    deltaMode dinormalisasi: 0 piksel, 1 garis (≈16 px), 2 halaman (≈400 px). */
 function wheelZoomFactor(deltaY, deltaMode){
   const px = deltaMode===1 ? deltaY*16 : deltaMode===2 ? deltaY*400 : deltaY;
-  return Math.pow(1.08, px/100);
+  return Math.pow(1.15, px/100);
+}
+/* Zoom dua-jari touchpad — browser mengirimnya sbg event wheel dgn ctrlKey=true
+   (deltaY kecil, deltaMode 0). Arah: di Chrome renggangan jari (zoom IN) hadir sbg
+   deltaY<0, sehingga pemakaian wheelZoomFactor langsung membuat renggangan malah
+   zoom OUT (bug yg dilaporkan) — tanda dibalik di sini. Kekuatan menengah:
+   ×1.08 per 10 px renggangan (≈1.05–1.15 per langkah kecil) — responsif, tak lagi
+   nyaris tak terasa. */
+function pinchZoomFactor(deltaY){
+  return Math.pow(1.08, -deltaY/10);
 }
 /* Kanvas R–X kini ADAPTIF: renderPlane menggambar dgn ukuran elemen aktual (#plane
    clientWidth/Height) & menyetel viewBox = ukuran itu → koordinat internal 1:1 dgn px
@@ -1452,7 +1473,8 @@ plane.addEventListener('wheel',e=>{
   /* titik DATA di bawah kursor (pxToR/pxToX): wcx + frac·span − span/2 — TANPA offset */
   const dR=v.cx + (mx-M.padL)/M.plotW*spanRw - spanRw/2;
   const dX=v.cy - ((my-M.padT)/M.plotH*spanXw - spanXw/2);
-  const factor=wheelZoomFactor(e.deltaY, e.deltaMode||0);
+  const factor = e.ctrlKey ? pinchZoomFactor(e.deltaY)
+                           : wheelZoomFactor(e.deltaY, e.deltaMode||0);
   const kNew=Math.max(0.12,Math.min(64,k*factor));
   const spanRw2=M.spanR/kNew, spanXw2=M.spanX/kNew;
   /* jaga titik data di bawah kursor tetap pada piksel yang sama (invarian zoom-anchor) */

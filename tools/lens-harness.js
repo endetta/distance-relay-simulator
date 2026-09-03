@@ -57,7 +57,7 @@ function loadSimulator(htmlPath) {
   global.ResizeObserver = class { observe() {} };
   global.katex = { render() {} };
 
-  new Function(code + ';global.__pub={render,S,P,computeModel,computeFaultCircuit,relayZones,relayFaultZ,flowSegments,tripSequence,wheelZoomFactor,C,add,scl,mag,ang,rad,deg};')();
+  new Function(code + ';global.__pub={render,S,P,computeModel,computeFaultCircuit,relayZones,relayFaultZ,flowSegments,tripSequence,wheelZoomFactor,pinchZoomFactor,C,add,scl,mag,ang,rad,deg};')();
 
   const pub = global.__pub;
   if (!pub || !pub.render) throw new Error('simulator did not export __pub');
