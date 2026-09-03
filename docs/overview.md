@@ -36,6 +36,8 @@ Buka file langsung di browser (`file:///`), atau `python -m http.server` / `npx 
 | `tools/flow-anim.test.js` | Tes revisi animasi aliran SLD (`flowSegments` + geometri panah). Jalankan: `node tools/flow-anim.test.js`. |
 | `tools/side-mode.test.js` | Tes pemangkasan layout & mode dua-mode kartu kanan (`tripSequence` + `P.sideMode`). Jalankan: `node tools/side-mode.test.js`. |
 | `tools/plane-zoom.test.js` | Tes zoom roda ±15%/100px + pinch dua-jari (`wheelZoomFactor`/`pinchZoomFactor`), jendela R–X dipepetkan ke kartu (×0.75 + pusat konten + clamp no-cut) & kanvas adaptif + halo putih pd label tick. Jalankan: `node tools/plane-zoom.test.js`. |
+| `tools/title-anim.test.js` | Tes animasi judul header (`tt-a`/`tt-b` + gradien `--ink→--copper-deep` + kilau `ttShine` + crossfade `ttSwapA/B` + reduced-motion), animasi collapse (`card-b-i` grid 1fr→0fr) & pemusatan saat semua ciut (`syncCollapsedCentering`). Jalankan: `node tools/title-anim.test.js`. |
+| `tools/lens.test.js` | Tes lensa beban (wedge simetris ber-fillet + titik sistem dinamis) & model loadability PRC-023. Jalankan: `node --test tools/lens.test.js`. |
 | `design-plans/` | Arsip design plan; yang ada berlabel **OBSOLETE** — jangan dieksekusi. |
 
 ## Arsitektur isi file HTML (urut dalam `<script>`)
@@ -76,6 +78,16 @@ Buka file langsung di browser (`file:///`), atau `python -m http.server` / `npx 
   `grid-template-rows 1fr→0fr` + fade (bukan `display:none`); saat semua kartu ciut
   `syncCollapsedCentering()` → `.params-panel.all-collapsed` (tumpukan dipusatkan,
   tak ada ruang kosong asimetris).
+- **Lensa beban — wedge simetris ber-fillet + titik sistem DINAMIS** (hasil riset:
+  area beban standar = region V/wedge; formula PRC-023 `0.85·V²/S` sudah benar): lensa
+  lama (sektor tajam satu sisi 0°..35°) diganti wedge **simetris ±(pf+margin)** (leading
+  & lagging) dengan **4 pojok difillet** — geometri murni `loadRegion`/`loadRegionPoints`
+  (radius fillet `rf=min(0.10·Δ,0.8·rIn·sinθ,0.4·Δ)`, tangensi busur `phiI/phiO` & ray
+  `ri1/ri2`; fallback wedge tajam saat θ kecil). **Titik sistem normal berfluktuasi
+  sepanjang waktu** mengelilingi `zlNow` dalam ellipse kecil (SVG `<animateMotion>` path
+  tertutup, `dur=14s`): sumbu radial dari headroom jari-jari, sumbu tangensial dari
+  headroom sudut → ellipse selalu DI DALAM lensa; label `sistem` ikut bergerak; fallback
+  statis bila headroom habis. Lensa tetap overlay yang TIDAK memengaruhi skala.
 - **Kartu readout** (`.side-card`, `updateReadout`): kotak status → kalimat ringkasan `.r-sum`
   (bahasa manusia, angka kunci `<b>`) → tabel 2 grup berjudul (`Impedansi gangguan`,
   `Lokasi gangguan & jangkauan`; grup `Relay & karakteristik` DIHAPUS); baris
@@ -158,11 +170,13 @@ dan arus loop gangguan per sumber + total dalam kA primer. Uji literalnya ada di
 ## Validasi (tanpa build)
 
 ```bash
-node tools/readout.test.js   # 24 asersi kartu readout (2 grup)
-node tools/sld-v-i.test.js   # 14 asersi model V/I + chip SLD
-node tools/flow-anim.test.js # 17 asersi panah aliran (flowSegments + #sld)
-node tools/side-mode.test.js # 15 asersi mode dua-mode & pemangkasan layout
-node tools/plane-zoom.test.js # 11 asersi zoom roda & kanvas adaptif
+node tools/readout.test.js     # 24 asersi kartu readout (2 grup)
+node tools/sld-v-i.test.js     # 14 asersi model V/I + chip SLD
+node tools/flow-anim.test.js   # 17 asersi panah aliran (flowSegments + #sld)
+node tools/side-mode.test.js   # 15 asersi mode dua-mode & pemangkasan layout
+node tools/plane-zoom.test.js  # 26 asersi zoom roda/pinch & jendela R–X
+node tools/title-anim.test.js  # 9 asersi animasi judul & collapse
+node --test tools/lens.test.js # 15 asersi lensa beban & model PRC-023
 ```
 
 Harness mengabaikan CSS & tidak punya hirarki DOM anak — teks status readout dibaca dari

@@ -24,7 +24,7 @@ Satu-satunya dependensi eksternal dimuat dari CDN (KaTeX, Google Fonts) — butu
 - **Diagram satu garis interaktif**: geser handle gangguan, klik kotak relay, klik simbol infeed; animasi aliran daya mengikuti fisika radial
 - **Model gangguan**: jenis (3φ, φ-φ, φ-G), posisi, impedansi gangguan resistif (Rf) atau kompleks (Rf+jXf), *infeed* dari sumber remote
 - **Error CT/PT** (CT saturasi ⇒ underreach, CVT transient ⇒ overreach) dengan visualisasi geseran Z asli vs Z terukur
-- **Lensa beban** (kriteria loadability PRC-023) & titik operasi pra-gangguan, indikator **SIR** (source impedance ratio)
+- **Lensa beban** (kriteria loadability PRC-023): wedge simetris ±sudut daya dengan pojok membulat (leading & lagging), dan **titik sistem normal yang dinamis** — berfluktuasi sepanjang waktu di sekitar nilai beban normal; indikator **SIR** (source impedance ratio)
 - Mode tampilan bahasa Indonesia
 
 ## Struktur
@@ -41,4 +41,5 @@ Tidak ada test suite formal; dua jalur validasi:
 - **Animasi aliran daya di SLD** — `node tools/flow-anim.test.js`: `flowSegments` (jalur/`kA`/warna per segmen; segmen Sumber→B hanya membawa arus sumber `ia`, tak membesar saat fault lintas Bus B) + geometri panah di `#sld` (glyph ∝ kA, kecepatan konstan 125 px/s).
 - **Mode & pemangkasan kartu kanan** — `node tools/side-mode.test.js`: `tripSequence` (urutan operasi relay enabled, relay non-trip dgn alasan) + mode `P.sideMode='seq'` di DOM; kartu waktu–impedansi & catatan tipe dihapus (halaman berakhir di dasar diagram R–X).
 - **Zoom & jendela R–X** — `node tools/plane-zoom.test.js`: `wheelZoomFactor` (±15% per 100 px gulir) + `pinchZoomFactor` (pinch dua-jari: renggangan = zoom in), jendela default dipepetkan ke kartu (×0.75 + pusat konten + clamp no-cut, label tick ber-halo putih), kanvas adaptif (diagram mengisi kartu, toolbar zoom sebagai chip di dalam plot).
+- **Lensa beban & PRC-023** — `node --test tools/lens.test.js`: model `0.85·V²/S` (batas dalam/ luar), wedge simetris ±sudut daya dengan 4 pojok difillet (`loadRegion`/`loadRegionPoints`: tangensi fillet, jangkar simetris, fallback degenerasi) + titik sistem dinamis (ellipse `<animateMotion>` tertutup yang tetap di dalam lensa).
 - **Animasi judul & collapse** — `node tools/title-anim.test.js`: header `.tt` dua span (`Simulator Distance Relay` ↔ `by Sheva - Endetta`) gradien `--ink→--copper-deep` tanpa `--teal` + kilau menyapu (`ttShine`) + crossfade (`ttSwapA/B`) + reduced-motion; collapse kartu parameter `grid-template-rows 1fr→0fr` + fade via wrapper `.card-b-i` (bukan `display:none`); pemusatan tumpukan saat semua kartu diciutkan (`syncCollapsedCentering` → `.params-panel.all-collapsed`).

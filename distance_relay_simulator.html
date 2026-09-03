@@ -914,6 +914,36 @@ function flowSegments(m, vi){
   return segs.map(s=>Object.assign({w:w(s.kA)},s));
 }
 
+/* ---------- lensa beban: wedge SIMETRIS ±θ dgn pojok fillet ----------
+   loadRegion: geometri murni (koordinat data Ω). θ = setengah sudut bukaan
+   (pf+margin). Empat pojok sektor (busur bertemu garis ray) dibulatkan oleh
+   lingkaran fillet berjari-jari rf yang TANGEN ke busur & ke ray-nya; dihitung
+   tertutup: δi=asin(rf/(rIn+rf)) → tangensi busur-dalam di phiI=θ−δi & tangensi
+   ray di ri1=√((rIn+rf)²−rf²); analog utk sisi luar (rOut−rf). Fallback wedge
+   tajam saat θ terlalu kecil (rf=0) agar tak pernah NaN. */
+function loadRegion(rIn,rOut,th){
+  const d=rOut-rIn;
+  let rf=Math.min(0.10*d, 0.8*rIn*Math.sin(th), 0.4*d);
+  if(th < 0.04 || rf <= 0.01*d){
+    return {th,rIn,rOut,rf:0,phiI:th,phiO:th,ri1:rIn,ri2:rOut};
+  }
+  const dI=Math.asin(rf/(rIn+rf)), dO=Math.asin(rf/(rOut-rf));
+  return {th,rIn,rOut,rf,
+    phiI:th-dI, phiO:th-dO,
+    ri1:Math.sqrt((rIn+rf)*(rIn+rf)-rf*rf),
+    ri2:Math.sqrt((rOut-rf)*(rOut-rf)-rf*rf)};
+}
+/* 8 jangkar perimeter (data Ω): ray−θ@ri1 → busur-dalam@−phiI → busur-dalam@+phiI
+   → ray+θ@ri1 → ray+θ@ri2 → busur-luar@+phiO → busur-luar@−phiO → ray−θ@ri2. */
+function loadRegionPoints(rIn,rOut,th){
+  const L=loadRegion(rIn,rOut,th);
+  const p=(r,a)=>C(r*Math.cos(a), r*Math.sin(a));
+  return {pts:[
+    p(L.ri1,-th), p(L.rIn,-L.phiI), p(L.rIn,L.phiI), p(L.ri1,th),
+    p(L.ri2,th),  p(L.rOut,L.phiO), p(L.rOut,-L.phiO), p(L.ri2,-th),
+  ], L};
+}
+
 /* ---------- R-X plane (fit + zoom/pan + semua relay, koordinat global) ---------- */
 function renderPlane(m,decisions){
   const svg=$('plane');
@@ -1040,19 +1070,56 @@ function renderPlane(m,decisions){
   if(P.showLoad){
     const la=rad(P.pfAngleDeg+P.loadEncroachDeg);
     const rIn=m.loadzMin, rOut=m.loadzNom;
-    const a1=0, a2=+la;   // menempel sumbu R; seluruhnya di kuadran induktif
-    const I1=toPx(C(rIn*Math.cos(a1), rIn*Math.sin(a1))), I2=toPx(C(rIn*Math.cos(a2), rIn*Math.sin(a2)));
-    const E1=toPx(C(rOut*Math.cos(a1), rOut*Math.sin(a1))), E2=toPx(C(rOut*Math.cos(a2), rOut*Math.sin(a2)));
-    s+=`<path d="M ${I1.x} ${I1.y} L ${E1.x} ${E1.y} A ${rOut*scale} ${rOut*scale} 0 0 0 ${E2.x} ${E2.y} L ${I2.x} ${I2.y} A ${rIn*scale} ${rIn*scale} 0 0 1 ${I1.x} ${I1.y} Z" fill="var(--green)" opacity="0.07" stroke="var(--green)" stroke-width="1.2" stroke-dasharray="5 4"/>`;
+    const {pts,L}=loadRegionPoints(rIn,rOut,la);
+    const Q=pts.map(p=>toPx(p));
+    /* path: M p0 → fillet→p1 → busur-dalam→p2 → fillet→p3 → L p4 → fillet→p5 →
+       busur-luar→p6 → fillet→p7 → L p0 Z. 4 fillet + 2 busur = 6 arc; SWEEP data
+       CCW, tapi SVG y-terbalik → busur luar & fillet luar memakai sweep 0. */
+    const rf=L.rf*scale;
+    if(L.rf>0){
+      const d=`M ${Q[0].x} ${Q[0].y} A ${rf} ${rf} 0 0 1 ${Q[1].x} ${Q[1].y}`+
+              ` A ${rIn*scale} ${rIn*scale} 0 0 1 ${Q[2].x} ${Q[2].y}`+
+              ` A ${rf} ${rf} 0 0 1 ${Q[3].x} ${Q[3].y}`+
+              ` L ${Q[4].x} ${Q[4].y}`+
+              ` A ${rf} ${rf} 0 0 0 ${Q[5].x} ${Q[5].y}`+
+              ` A ${rOut*scale} ${rOut*scale} 0 0 0 ${Q[6].x} ${Q[6].y}`+
+              ` A ${rf} ${rf} 0 0 0 ${Q[7].x} ${Q[7].y}`+
+              ` L ${Q[0].x} ${Q[0].y} Z`;
+      s+=`<path d="${d}" fill="var(--green)" opacity="0.07" stroke="var(--green)" stroke-width="1.2" stroke-dasharray="5 4"/>`;
+    } else { /* fallback wedge tajam (θ sangat kecil) */
+      s+=`<path d="M ${Q[0].x} ${Q[0].y} L ${Q[4].x} ${Q[4].y} A ${rOut*scale} ${rOut*scale} 0 0 0 ${Q[6].x} ${Q[6].y} L ${Q[2].x} ${Q[2].y} A ${rIn*scale} ${rIn*scale} 0 0 1 ${Q[0].x} ${Q[0].y} Z" fill="var(--green)" opacity="0.07" stroke="var(--green)" stroke-width="1.2" stroke-dasharray="5 4"/>`;
+    }
     s+=`<text x="${padL+plotW-6}" y="${padT+10}" font-family="JetBrains Mono" font-size="9" fill="var(--green)" text-anchor="end">lensa beban (${fmt(rIn,1)}–${fmt(rOut,1)} Ω)</text>`;
-    /* titik operasi pra-gangguan: Z = V²/S(beban aktual) pada sudut beban aktual.
-       Dinamis — bergeser setiap beban/sudut normal digeser. Berdenyut agar mudah ditemukan. */
-    const Pn=toPx(m.zlNow);
-    s+=`<circle cx="${Pn.x}" cy="${Pn.y}" r="8" fill="none" stroke="var(--green)" stroke-width="1.4"><animate attributeName="r" values="6;13;6" dur="2.4s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.8;0.1;0.8" dur="2.4s" repeatCount="indefinite"/></circle>`;
-    s+=`<circle cx="${Pn.x}" cy="${Pn.y}" r="4" fill="var(--green)" stroke="var(--surface)" stroke-width="1.2"/>`;
-    const fl=Pn.x>padL+plotW-30;
-    s+=`<text x="${fl?Pn.x-7:Pn.x+7}" y="${Pn.y-6}" font-family="JetBrains Mono" font-size="8.5" fill="var(--green)" font-weight="700" text-anchor="${fl?'end':'start'}">sistem</text>`;
+    /* titik operasi pra-gangguan — DINAMIS: mengelilingi zlNow dalam ellipse kecil
+       (beban berfluktuasi ringan↔berat di sekitar nilai normal; slider tetap menentu-
+       kan PUSAT locus). Sumbu radial aR dari headroom jari-jari, sumbu tangensial aT
+       dari headroom sudut → ellipse dijamin tetap DI DALAM lensa. Gerak via
+       animateMotion (path tertutup M…Z), label ikut bergerak. */
+    const mg=mag(m.zlNow), thC=Math.atan2(m.zlNow.X,m.zlNow.R);
+    const aR=0.35*Math.max(Math.min(rOut-mg, mg-rIn), 0);
+    const aT=0.5*Math.max(mg*Math.tan(Math.max(la-Math.abs(thC),0)), 0);
+    if(aR>0.5 && aT>0.5){
+      const u=C(Math.cos(thC),Math.sin(thC)), v=C(-u.X,u.R);
+      const e0=add(m.zlNow,scl(u,aR)), e1=sub(m.zlNow,scl(u,aR));
+      const Q0=toPx(e0), Q1=toPx(e1), Qc=toPx(m.zlNow);
+      const rot=deg(Math.atan2(Q1.y-Q0.y,Q1.x-Q0.x));
+      const mp=`M ${Q0.x} ${Q0.y} A ${aR*scale} ${aT*scale} ${rot} 0 1 ${Q1.x} ${Q1.y} A ${aR*scale} ${aT*scale} ${rot} 0 1 ${Q0.x} ${Q0.y} Z`;
+      const fl=Qc.x>padL+plotW-30;
+      s+=`<g>`+
+        `<circle cx="${Qc.x}" cy="${Qc.y}" r="8" fill="none" stroke="var(--green)" stroke-width="1.4"><animate attributeName="r" values="6;13;6" dur="2.4s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.8;0.1;0.8" dur="2.4s" repeatCount="indefinite"/></circle>`+
+        `<circle cx="${Qc.x}" cy="${Qc.y}" r="4" fill="var(--green)" stroke="var(--surface)" stroke-width="1.2"/>`+
+        `<text x="${fl?Qc.x-7:Qc.x+7}" y="${Qc.y-6}" font-family="JetBrains Mono" font-size="8.5" fill="var(--green)" font-weight="700" text-anchor="${fl?'end':'start'}">sistem</text>`+
+        `<animateMotion dur="14s" repeatCount="indefinite" path="${mp}"/>`+
+        `</g>`;
+    } else { /* headroom habis (mis. beban/sudut ekstrem) — titik statis dgn pulse */
+      const Pn=toPx(m.zlNow);
+      s+=`<circle cx="${Pn.x}" cy="${Pn.y}" r="8" fill="none" stroke="var(--green)" stroke-width="1.4"><animate attributeName="r" values="6;13;6" dur="2.4s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.8;0.1;0.8" dur="2.4s" repeatCount="indefinite"/></circle>`;
+      s+=`<circle cx="${Pn.x}" cy="${Pn.y}" r="4" fill="var(--green)" stroke="var(--surface)" stroke-width="1.2"/>`;
+      const fl=Pn.x>padL+plotW-30;
+      s+=`<text x="${fl?Pn.x-7:Pn.x+7}" y="${Pn.y-6}" font-family="JetBrains Mono" font-size="8.5" fill="var(--green)" font-weight="700" text-anchor="${fl?'end':'start'}">sistem</text>`;
+    }
     /* penunjuk tepi bila titik di luar jendela (mis. view di-zoom ke zona saja) */
+    const Pn=toPx(m.zlNow);
     if(Pn.x<xL||Pn.x>xR2||Pn.y<yTop||Pn.y>yBot){
       const cxp=padL+plotW/2, cyp=padT+plotH/2;
       const dx=Pn.x-cxp, dy=Pn.y-cyp;

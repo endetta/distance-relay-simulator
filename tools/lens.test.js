@@ -1,9 +1,11 @@
 /* Tes lensa beban (load-encroachment lens) pada bidang R-X.
-   Cara jalankan: node --test tools/
-   Seam yang diuji (sudah disepakati di CLAUDE.md):
-     1. computeModel() -> loadzMin / loadzNom (Ω sekunder)
-     2. string SVG #plane hasil render() — geometri path lensa di-flatten dan
-        diukur dalam KOORDINAT DATA (Ω) via pemetaan label tick sumbu. */
+   Cara jalankan: node --test tools/lens.test.js
+   Seam yang diuji (disepakati sesi ini):
+     1. computeModel() -> loadzMin / loadzNom (Ω sekunder) — formula PRC-023 0.85·V²/S
+     2. Bentuk lensa: wedge SIMETRIS ±(pf+margin) dgn 4 pojok difillet (bukan sektor
+        tajam satu sisi) — helper murni loadRegion/loadRegionPoints + string SVG #plane
+     3. Titik sistem NORMAL DINAMIS: mengelilingi zlNow dalam ellipse kecil via
+        <animateMotion> (path tertutup M…Z), ellipse tetap DI DALAM lensa. */
 'use strict';
 import test from 'node:test';
 import assert from 'node:assert';
@@ -16,6 +18,7 @@ const FILE = fileURLToPath(new URL('../distance_relay_simulator.html', import.me
 
 let ctx;
 test.before(() => { ctx = loadSimulator(FILE); });
+const rad = d => d * Math.PI / 180;
 
 /* ---------- util: pemetaan px -> data dari tick label SVG ---------- */
 function readTicks(svg) {
@@ -35,10 +38,10 @@ function readTicks(svg) {
 const toR = (t, px) => t.r.slope * px + t.r.b0;
 const toX = (t, px) => t.x.slope * px + t.x.b0;
 
-/* Flatten SEMUA geometri path (lensa = satu-satunya <path> di #plane) lalu
-   konversi tiap titik ke data (Ω). Parser perintah-per-intah: M/L pakai pasangan
+/* Flatten SEMUA geometri path (lensa = <path> pertama di #plane) lalu
+   konversi tiap titik ke data (Ω). Parser perintah-perintah: M/L pakai pasangan
    (x,y); A (arc SVG) berformat `A rx ry rot large-arc sweep x y` — endpoint =
-   DUA angka TERAKHIR, bukan rx/ry (bug alat ukur: rx/ry terbaca sbg koordinat). */
+   DUA angka TERAKHIR, bukan rx/ry. */
 function lensPoints(svg) {
   const t = readTicks(svg);
   const d = (svg.match(/<path[^>]*d="([^"]+)"/) || [])[1];
@@ -75,32 +78,111 @@ test('model: rasio batas luar/dalam realistis (≤3), bukan 5×', () => {
   assert.ok(ratio > 1.2 && ratio <= 3.0, `rasio ${ratio.toFixed(2)}× di luar 1.2–3.0`);
 });
 
-/* ---------- 2. GEOMETRI: lensa di kuadran induktif saja ---------- */
+/* ---------- 2. GEOMETRI: wedge simetris ±θ, pojok difillet ---------- */
+test('lensa: SIMETRIS terhadap sumbu R — minX ≈ −maxX (beban boleh leading & lagging)', () => {
+  const b = bbox(lensPoints(planeSvg(ctx)));
+  assert.ok(b.minX < 0, `minX ${b.minX.toFixed(2)} harus negatif (sisi leading)`);
+  assert.ok(Math.abs(b.minX + b.maxX) < 0.6, `tak simetris: minX ${b.minX.toFixed(2)} vs maxX ${b.maxX.toFixed(2)}`);
+});
+
 test('lensa: seluruhnya di R>0 (sisi resistif kanan origin)', () => {
-  const b = bbox(lensPoints(planeSvg(ctx.els ? ctx : ctx)));
+  const b = bbox(lensPoints(planeSvg(ctx)));
   assert.ok(b.minR > 0, `minR ${b.minR.toFixed(2)} harus > 0`);
 });
 
-test('lensa: tidak masuk daerah kapasitif (X ≥ −0.5 Ω)', () => {
-  const b = bbox(lensPoints(planeSvg(ctx)));
-  assert.ok(b.minX >= -0.5, `minX ${b.minX.toFixed(2)} — bagian kapasitif dilarang`);
+test('lensa: pojok tajam dibuang — path memakai ≥6 arc (A: 4 fillet + 2 busur)', () => {
+  const svg = planeSvg(ctx);
+  const d = (svg.match(/<path[^>]*d="([^"]+)"/) || [])[1];
+  const arcs = (d.match(/ A /g) || []).length;
+  assert.ok(arcs >= 6, `hanya ${arcs} arc — sektor tajam tidak difillet`);
 });
 
-test('lensa: sektor menempel sumbu R — tepi bawah ≈ sumbu R (X≈0 di R≥rIn)', () => {
-  // endpoint M pertama & A terakhir adalah sudut-sudut sektor pada tepi bawah/atas;
-  // minimal dua titik tepi harus X≈0 (sentuhan dgn sumbu R)
-  const pts = lensPoints(planeSvg(ctx));
-  const near = pts.filter(p => Math.abs(p.X) < 1 && p.R > 1);
-  assert.ok(near.length >= 2, `titik tepi X≈0 hanya ${near.length} — lensa tidak menempel sumbu R`);
+test('loadRegion: tangensi fillet (literal hitung tangan, θ=35°, rIn=9.35, rOut=22)', () => {
+  const L = ctx.pub.loadRegion(9.35, 22.0, rad(35));
+  assert.ok(Math.abs(L.rf - 1.265) < 0.01, `rf ${L.rf.toFixed(3)} != 1.265`);
+  assert.ok(Math.abs(L.phiI - rad(28.16)) < 0.005, `phiI ${L.phiI.toFixed(4)} != 28.16°`);
+  assert.ok(Math.abs(L.phiO - rad(31.50)) < 0.005, `phiO ${L.phiO.toFixed(4)} != 31.50°`);
+  assert.ok(Math.abs(L.ri1 - 10.54) < 0.05, `ri1 ${L.ri1.toFixed(2)} != 10.54`);
+  assert.ok(Math.abs(L.ri2 - 20.70) < 0.05, `ri2 ${L.ri2.toFixed(2)} != 20.70`);
+  // busur dalam/ luar menembus sumbu R (tidak ada celah di 0°): phiI > 0.3·th
+  assert.ok(L.phiI > 0.3 * L.th, 'phiI terlalu kecil — celah di sumbu R');
 });
 
-test('lensa: kompak — lebar R ≤ 3.5× tinggi X (bukan bowtie raksasa)', () => {
-  const b = bbox(lensPoints(planeSvg(ctx)));
-  const w = b.maxR - b.minR, h = b.maxX - b.minX;
-  assert.ok(w <= 3.5 * h, `lebar ${w.toFixed(1)} Ω > 3.5 × tinggi ${h.toFixed(1)} Ω`);
+test('loadRegionPoints: 8 jangkar — simetris, radius ∈ [rIn,rOut], pojok terpotong', () => {
+  const { pts, L } = ctx.pub.loadRegionPoints(9.35, 22.0, rad(35));
+  assert.strictEqual(pts.length, 8, `jangkar ${pts.length} != 8`);
+  // pasangan cermin (sumbu R): [0,3] [1,2] [4,7] [5,6] — titik ±θ dengan jari-jari sama
+  for (const [i, j] of [[0, 3], [1, 2], [4, 7], [5, 6]]) {
+    const a = pts[i], b = pts[j];
+    assert.ok(Math.abs(a.R - b.R) < 0.01 && Math.abs(a.X + b.X) < 0.01, `pasangan ${i}/${j} tak simetris`);
+  }
+  for (const p of pts) {
+    const z = Math.hypot(p.R, p.X);
+    assert.ok(z >= 9.35 - 0.05 && z <= 22.0 + 0.05, `radius ${z.toFixed(2)} di luar [rIn,rOut]`);
+  }
+  // pojok sektor asli (rOut @ ±θ) TIDAK ada sebagai jangkar — sudah dipotong fillet
+  const corner = { R: 22 * Math.cos(rad(35)), X: 22 * Math.sin(rad(35)) };
+  const dMin = Math.min(...pts.map(p => Math.hypot(p.R - corner.R, p.X - corner.X)));
+  assert.ok(dMin > L.rf * 0.5, `pojok sektor masih ada (jarak ${dMin.toFixed(2)} Ω)`);
 });
 
-/* ---------- 3. KONSISTENSI DGN ISI PANEL ---------- */
+test('loadRegion: degenerasi (θ kecil / lensa tipis) → fallback wedge tajam, tanpa NaN', () => {
+  const L0 = ctx.pub.loadRegion(1, 2, rad(2));
+  assert.strictEqual(L0.rf, 0, 'θ < ambang harus fallback rf=0');
+  const pts = ctx.pub.loadRegionPoints(1, 2, rad(2)).pts;
+  for (const p of pts) {
+    assert.ok(Number.isFinite(p.R) && Number.isFinite(p.X), 'NaN di jangkar fallback');
+    const z = Math.hypot(p.R, p.X);
+    assert.ok(z >= 0.9 && z <= 2.1, `radius ${z.toFixed(2)} tak wajar`);
+  }
+});
+
+/* ---------- 3. TITIK SISTEM NORMAL — DINAMIS (ellipse di dalam lensa) ---------- */
+test('titik dinamis: animateMotion dgn path ellipse TERTUTUP (M…Z) + dur 8–25 s + indefinite', () => {
+  const svg = planeSvg(ctx);
+  const m = svg.match(/<animateMotion dur="([\d.]+)s" repeatCount="indefinite" path="M ([^"]+)"/);
+  assert.ok(m, 'animateMotion titik sistem tidak ada');
+  assert.ok(+m[1] >= 8 && +m[1] <= 25, `dur ${m[1]}s di luar 8–25 s`);
+  assert.ok(m[2].includes(' Z'), 'path gerak tidak tertutup (Z)');
+});
+
+test('titik dinamis: 4 titik kardinal ellipse tetap DI DALAM lensa', () => {
+  const svg = planeSvg(ctx);
+  const m = svg.match(/<animateMotion dur="[\d.]+s" repeatCount="indefinite" path="M ([^"]+)"/);
+  assert.ok(m, 'animateMotion tidak ada');
+  const nums = [...m[1].matchAll(/-?\d*\.?\d+(?:[eE][-+]?\d+)?/g)].map(n => +n[0]);
+  // M x0 y0 A rx ry rot 0 1 x1 y1 A rx ry rot 0 1 x0 y0 Z
+  const x0 = nums[0], y0 = nums[1], rx = nums[2], ry = nums[3];
+  const x1 = nums[7], y1 = nums[8];
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy);
+  const vx = -dy / len, vy = dx / len; // vektor tangensial (tegak lurus sumbu besar)
+  const pts = [
+    { px: x0, py: y0 }, { px: x1, py: y1 },                       // ujung radial
+    { px: cx + ry * vx, py: cy + ry * vy },                        // ujung tangensial +
+    { px: cx - ry * vx, py: cy - ry * vy },                        // ujung tangensial −
+  ];
+  const t = readTicks(svg);
+  const m2 = ctx.pub.computeModel();
+  const th = rad(ctx.pub.P.pfAngleDeg + ctx.pub.P.loadEncroachDeg);
+  for (const p of pts) {
+    const R = toR(t, p.px), X = toX(t, p.py);
+    const z = Math.hypot(R, X), a = Math.atan2(X, R);
+    assert.ok(z >= m2.loadzMin - 0.3 && z <= m2.loadzNom + 0.3,
+      `kardinal |Z| ${z.toFixed(2)} di luar [${m2.loadzMin.toFixed(2)}, ${m2.loadzNom.toFixed(2)}]`);
+    assert.ok(Math.abs(a) <= th + 0.02, `kardinal sudut ${(a * 180 / Math.PI).toFixed(1)}° > ±${(th * 180 / Math.PI).toFixed(1)}°`);
+  }
+});
+
+test('titik dinamis: ellipse radial ≠ tangensial (rx≠ry — bukan lingkaran)', () => {
+  const svg = planeSvg(ctx);
+  const m = svg.match(/<animateMotion dur="[\d.]+s" repeatCount="indefinite" path="M ([^"]+)"/);
+  const nums = [...m[1].matchAll(/-?\d*\.?\d+/g)].map(n => +n[0]);
+  const rx = nums[2], ry = nums[3];
+  assert.ok(Math.abs(rx - ry) > 0.5, `rx ${rx.toFixed(1)} ≈ ry ${ry.toFixed(1)} — lingkaran, bukan ellipse`);
+});
+
+/* ---------- 4. KONSISTENSI DGN ISI PANEL ---------- */
 test('label lensa konsisten dgn model & masuk akal (< 30 Ω sekunder)', () => {
   const svg = planeSvg(ctx);
   const label = svg.match(/lensa beban \(([\d.]+)–([\d.]+) Ω\)/);
@@ -117,7 +199,7 @@ test('titik sistem (beban normal) berada DI DALAM lensa', () => {
   const angDeg = Math.atan2(m.zlNow.X, m.zlNow.R) * 180 / Math.PI;
   const la = ctx.pub.P.pfAngleDeg + ctx.pub.P.loadEncroachDeg;
   assert.ok(mag >= m.loadzMin && mag <= m.loadzNom, `|Z sistem| ${mag.toFixed(1)} di luar [${m.loadzMin.toFixed(1)}, ${m.loadzNom.toFixed(1)}]`);
-  assert.ok(angDeg >= 0 && angDeg <= la, `sudut sistem ${angDeg}° di luar [0, ${la}°]`);
+  assert.ok(Math.abs(angDeg) <= la, `sudut sistem ${angDeg}° di luar ±${la}°`);
 });
 
 test('zona relay tetap di luar/di bawah batas dalam lensa (zone3 < loadzMin)', () => {
@@ -126,7 +208,7 @@ test('zona relay tetap di luar/di bawah batas dalam lensa (zone3 < loadzMin)', (
   assert.ok(Math.hypot(z.zone3.R, z.zone3.X) < m.loadzMin, 'zone 3 menembus lensa beban');
 });
 
-/* ---------- 4. INVARIANS SKALA (regresi bug lama) ---------- */
+/* ---------- 5. INVARIANS SKALA (regresi bug lama) ---------- */
 test('lensa TIDAK memengaruhi skala plot: span grid sama dgn showLoad=off', () => {
   const P = ctx.pub.P;
   const ticks1 = readTicks(planeSvg(ctx)).r;
