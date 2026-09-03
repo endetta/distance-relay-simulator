@@ -47,7 +47,8 @@ Buka file langsung di browser (`file:///`), atau `python -m http.server` / `npx 
    R1–R4 (`charType`, reach zona, timer), `selectedRelayId`, `showZones`, `showLoad`,
    `ui.view` (zoom/pan).
 3. **DOM bindings**: slider/checkbox/button → tulis `S` → `render()`. Ada tombol:
-   animasi sapuan gangguan (`#animateBtn`), collapse cards.
+   animasi sapuan gangguan (`#animateBtn`), collapse cards (animasi grid + pemusatan
+   saat semua ciut via `syncCollapsedCentering`).
 4. **Model inti** (`computeModel`) + **zona & trip**: `relayZones`, `charShape` (satu-satunya
    sumber geometri zona), `pointIn`, `tripTest`, `decideRelay` (zona 1→2→3; keputusan
    memakai **Z terukur** `zm`, bukan Z apparent). `relayFaultZ` memberi `{behind,z,zm,zlPrim,…}`.
@@ -66,8 +67,15 @@ Buka file langsung di browser (`file:///`), atau `python -m http.server` / `npx 
   dihapus. Klik = skip; `prefers-reduced-motion` = langsung; `<noscript>` fallback.
   **`#root.ready .wrap` mengatur tampilnya halaman**: `.wrap` default `opacity:0` — jangan
   hapus, atau halaman bocor sebelum animasi. Tepi panel pakai CSS mask (fade kiri–kanan).
-- **Header halaman**: judul `Simulator Distance Relay` 17px gradien `--blue→--teal` + dot
-  copper (`--teal` & `--copper-deep` ditambahkan ke `:root`); `.wrap` padding 14px/40px.
+- **Header halaman**: `.tt` dua span — `tt-a` "Simulator Distance Relay" & `tt-b`
+  "by Sheva - Endetta" — bergantian via crossfade opacity (`ttSwapA/B`), gradien
+  `--ink→--copper-deep` (bukan `--blue→--teal`) + kilau menyapu kiri→kanan (`ttShine`,
+  band terang di dalam `background-size` di-clip ke huruf); `prefers-reduced-motion`
+  mematikannya & menyembunyikan `tt-b`. `.wrap` padding 14px/40px.
+- **Collapse animasi & pemusatan**: kartu parameter dibungkus `.card-b-i`; collapse
+  `grid-template-rows 1fr→0fr` + fade (bukan `display:none`); saat semua kartu ciut
+  `syncCollapsedCentering()` → `.params-panel.all-collapsed` (tumpukan dipusatkan,
+  tak ada ruang kosong asimetris).
 - **Kartu readout** (`.side-card`, `updateReadout`): kotak status → kalimat ringkasan `.r-sum`
   (bahasa manusia, angka kunci `<b>`) → tabel 2 grup berjudul (`Impedansi gangguan`,
   `Lokasi gangguan & jangkauan`; grup `Relay & karakteristik` DIHAPUS); baris

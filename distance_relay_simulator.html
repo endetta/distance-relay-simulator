@@ -25,7 +25,9 @@
   .card-h{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600;margin:0 0 12px;}
   .card-h .dot{width:7px;height:7px;border-radius:50%;background:var(--copper);}
   .card-h .chev{margin-left:auto;color:var(--ink-soft);font-size:11px;transition:transform .15s;}
-  .card.collapsed .card-b{display:none;}
+  .card .card-b{display:grid;grid-template-rows:1fr;transition:grid-template-rows .35s ease,opacity .22s ease;}
+  .card .card-b-i{overflow:hidden;min-height:0;}
+  .card.collapsed .card-b{grid-template-rows:0fr;opacity:0;}
   .card.collapsed .chev{transform:rotate(-90deg);}
 
   /* wadah parameter: satu parent section dgn scroll sendiri, tinggi dikunci
@@ -38,6 +40,9 @@
   .params-panel::-webkit-scrollbar-thumb{background:var(--line);border-radius:10px;}
   .params-panel::-webkit-scrollbar-thumb:hover{background:var(--blue-soft);}
   @media(max-width:920px){.params-panel{height:auto!important;overflow:visible;scrollbar-gutter:auto;}}
+  /* saat SEMUA kartu parameter diciutkan, panel hampir kosong → pusatkan tumpukan
+     header kartu agar tidak ada ruang kosong asimetris di bawah (syncCollapsedCentering). */
+  .params-panel.all-collapsed{justify-content:center;}
 
   .field{margin-bottom:11px;}
   .field:last-child{margin-bottom:0;}
@@ -74,10 +79,22 @@
   .mini-btn{padding:5px 9px;border:1px solid var(--line);background:var(--surface);border-radius:7px;font-size:11.5px;font-weight:500;color:var(--ink-soft);cursor:pointer;}
   .mini-btn:hover{border-color:var(--blue);color:var(--blue);}
   .topbar{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
-  /* judul halaman: dot copper + teks gradien biru→toska (tetap satu baris dgn tombol) */
-  .topbar .tt{display:inline-flex;align-items:center;font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;letter-spacing:-.01em;margin-right:auto;line-height:1.2;
-    background:linear-gradient(100deg,var(--blue) 15%,var(--teal) 85%);
+  /* judul halaman: dot copper + teks gradien ink→copper-deep + kilau menyapu
+     kiri→kanan (band terang di dalam background, di-clip ke huruf) + teks bergantian
+     "Simulator Distance Relay" ↔ "by Sheva - Endetta" via opacity crossfade. */
+  .topbar .tt{position:relative;display:inline-flex;align-items:center;font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;letter-spacing:-.01em;margin-right:auto;line-height:1.2;}
+  .topbar .tt-a,.topbar .tt-b{background:linear-gradient(100deg,var(--ink) 18%,var(--copper-deep) 42%,rgba(255,255,255,.9) 52%,var(--copper-deep) 62%,var(--ink) 85%);
+    background-size:260% 100%;
     -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;}
+  .topbar .tt-a{animation:ttShine 6s linear infinite,ttSwapA 8s ease-in-out infinite;}
+  .topbar .tt-b{position:absolute;left:20px;top:50%;transform:translateY(-50%);white-space:nowrap;animation:ttShine 6s linear infinite,ttSwapB 8s ease-in-out infinite;}
+  @keyframes ttShine{0%{background-position:140% 0}100%{background-position:-140% 0}}
+  @keyframes ttSwapA{0%,40%{opacity:1}60%,100%{opacity:0}}
+  @keyframes ttSwapB{0%,40%{opacity:0}60%,100%{opacity:1}}
+  @media (prefers-reduced-motion: reduce){
+    .topbar .tt-a,.topbar .tt-b{animation:none!important;}
+    .topbar .tt-b{display:none;}
+  }
   .topbar .tt::before{content:'';width:9px;height:9px;border-radius:50%;background:var(--copper);box-shadow:0 0 0 3.5px var(--copper-soft);margin-right:11px;flex:none;}
   .mini-btn.hl{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600;padding:6px 12px;}
   .topbar .mini-btn.hl{padding:2px 10px;line-height:1.2;}
@@ -243,7 +260,7 @@
 <div class="wrap">
 
   <div class="topbar">
-    <span class="tt">Simulator Distance Relay</span>
+    <span class="tt"><span class="tt-a">Simulator Distance Relay</span><span class="tt-b">by Sheva - Endetta</span></span>
     <button class="mini-btn hl" id="collapseAll">Ciutkan semua</button>
     <button class="mini-btn hl" id="expandAll">Buka semua</button>
   </div>
@@ -254,7 +271,7 @@
       <div class="params-panel" id="paramsPanel">
       <div class="card" data-card="line">
         <div class="card-h"><span class="dot"></span>Parameter saluran<span class="chev">▾</span></div>
-        <div class="card-b">
+        <div class="card-b"><div class="card-b-i">
           <div class="field">
             <label>Saluran 1 — panjang (km) <b id="l1v">100</b></label>
             <input type="range" id="l1" min="10" max="250" step="5" value="100">
@@ -279,12 +296,12 @@
             <div class="field"><label>Zs (Ω)</label><input type="number" id="zsmag" value="10" step="0.5" min="0"></div>
           </div>
           <div class="hint" id="sirOut">SIR = |Zs|/|Z1|</div>
-        </div>
+        </div></div>
       </div>
 
       <div class="card" data-card="load">
         <div class="card-h"><span class="dot"></span>Beban &amp; zona beban<span class="chev">▾</span></div>
-        <div class="card-b">
+        <div class="card-b"><div class="card-b-i">
           <div class="row2">
             <div class="field"><label>V saluran (kV)</label><input type="number" id="vLL_kV" value="150" step="1" min="1"></div>
             <div class="field"><label>Beban maks (MVA)</label><input type="number" id="loadMVA" value="120" step="1" min="1"></div>
@@ -300,12 +317,12 @@
           <div class="zline" id="loadzOut">Z beban min ≈ — Ω</div>
           <div class="toggle-row"><span>Tampilkan zona beban</span><input type="checkbox" id="showLoad" checked></div>
           <div class="toggle-row"><span>Tampilkan Zone 1/2/3</span><input type="checkbox" id="showZones" checked></div>
-        </div>
+        </div></div>
       </div>
 
       <div class="card" data-card="fault">
         <div class="card-h"><span class="dot"></span>Parameter gangguan<span class="chev">▾</span></div>
-        <div class="card-b">
+        <div class="card-b"><div class="card-b-i">
           <div class="btngroup" id="faultTypeGroup">
             <button data-v="3ph" class="active">3-fasa</button>
             <button data-v="phph">Fasa-fasa</button>
@@ -344,12 +361,12 @@
             <div class="err-row over"><span class="tag">CVT transient</span><span class="eff">V↓ → |Z| ↓</span><span class="badge">OVERREACH</span></div>
             <div class="err-foot">Makanya Zone 1 tak pernah 100% — sisanya margin utk error + infeed.</div>
           </div>
-        </div>
+        </div></div>
       </div>
 
       <div class="card" data-card="relays">
         <div class="card-h"><span class="dot"></span>Relay<span class="chev">▾</span></div>
-        <div class="card-b" id="relayList"></div>
+        <div class="card-b"><div class="card-b-i" id="relayList"></div></div>
       </div>
 
       <button id="animateBtn">▶ Animasikan sapuan gangguan</button>
@@ -620,6 +637,14 @@ const modalRaw=id=>({'mz1':modalRelay.z1Reach,'mz2':modalRelay.z2Reach,'mz3a':mo
 function setCollapsed(card,state){
   S.ui.collapsed[card]=state;
   document.querySelector(`.card[data-card="${card}"]`).classList.toggle('collapsed',state);
+  syncCollapsedCentering();
+}
+/* Saat SEMUA kartu parameter diciutkan, panel nyaris kosong → pusatkan tumpukan
+   kartu (kelas .all-collapsed) supaya tak ada ruang kosong asimetris di bawah. */
+function syncCollapsedCentering(){
+  const cards=document.querySelectorAll('.card[data-card]');
+  const all=cards.length>0 && Array.from(cards).every(c=>!!S.ui.collapsed[c.dataset.card]);
+  $('paramsPanel').classList.toggle('all-collapsed',all);
 }
 document.querySelectorAll('.card-h').forEach(h=>{
   h.addEventListener('click',()=>{
@@ -1551,6 +1576,7 @@ function render(){
 /* ---------- init ---------- */
 buildRelayList();
 render();
+syncCollapsedCentering();
 
 /* ---------- kunci tinggi halaman & tinggi panel parameter ----------
    Mode layar-terkunci (lockH): halaman dikunci 1 layar (CSS media query di atas);

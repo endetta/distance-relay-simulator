@@ -16,7 +16,12 @@ function makeEl(id) {
     checked: true,
     style: {},
     dataset: {},
-    classList: { add() {}, remove() {}, toggle() {} },
+    classList: (() => { const s = new Set(); return {
+      add(c){ s.add(c); },
+      remove(c){ s.delete(c); },
+      toggle(c, force){ const on = force === undefined ? !s.has(c) : !!force; on ? s.add(c) : s.delete(c); return on; },
+      contains(c){ return s.has(c); },
+    }; })(),
     addEventListener() {},
     querySelectorAll: () => [],
     querySelector: () => makeEl('q'),  // generik: .sw dsb. cukup "ada"
@@ -40,6 +45,11 @@ function loadSimulator(htmlPath) {
       const cls = sel.slice(1);
       // .card-h / .rels / .grid / .card[data-card] — harness hanya butuh yang statis
       if (cls === 'card-h') return ['line', 'load', 'fault', 'relays'].map(c => makeEl('h-' + c));
+      if (sel === '.card[data-card]') return ['line', 'load', 'fault', 'relays'].map(c => {
+        const el = makeEl('card-' + c);
+        el.dataset.card = c;
+        return el;
+      });
       return [];
     }
     return [];
@@ -57,7 +67,7 @@ function loadSimulator(htmlPath) {
   global.ResizeObserver = class { observe() {} };
   global.katex = { render() {} };
 
-  new Function(code + ';global.__pub={render,S,P,computeModel,computeFaultCircuit,relayZones,relayFaultZ,flowSegments,tripSequence,wheelZoomFactor,pinchZoomFactor,C,add,scl,mag,ang,rad,deg};')();
+  new Function(code + ';global.__pub={render,S,P,computeModel,computeFaultCircuit,relayZones,relayFaultZ,flowSegments,tripSequence,wheelZoomFactor,pinchZoomFactor,syncCollapsedCentering,C,add,scl,mag,ang,rad,deg};')();
 
   const pub = global.__pub;
   if (!pub || !pub.render) throw new Error('simulator did not export __pub');
