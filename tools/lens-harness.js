@@ -65,7 +65,6 @@ function loadSimulator(htmlPath) {
   global.addEventListener = () => {};
   global.matchMedia = () => ({ matches: true }); // anggap layar sempit → panel height tak ditulis
   global.ResizeObserver = class { observe() {} };
-  global.katex = { render() {} };
 
   new Function(code + ';global.__pub={render,S,P,computeModel,computeFaultCircuit,relayZones,relayFaultZ,flowSegments,tripSequence,wheelZoomFactor,pinchZoomFactor,syncCollapsedCentering,loadRegion,loadRegionPoints,C,add,scl,mag,ang,rad,deg};')();
 

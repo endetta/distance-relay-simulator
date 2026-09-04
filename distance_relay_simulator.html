@@ -7,7 +7,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
 <style>
   :root{
     --bg:#F1F3F0; --surface:#FFFFFF; --ink:#16233A; --ink-soft:#4A5568;
@@ -145,10 +144,8 @@
   .status .tlabel{font-family:'JetBrains Mono',monospace;font-size:12px;margin-top:2px;}
   .readout{flex:1;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ink);overflow-y:auto;min-height:0;}
   #sld{max-width:1200px;margin:0 auto;}   /* SLD tak raksasa di kolom sangat lebar */
-  /* ringkasan dulu (kalimat 1 baris), lalu tabel teknis dlm 3 grup berjudul —
-     tanpa pemisah putus-putus agar mata tak perlu membaca semua baris */
-  .readout .r-sum{font-family:'Inter',sans-serif;font-size:12px;line-height:1.55;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 11px;}
-  .readout .r-sum b{font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--blue);white-space:nowrap;}
+  /* kartu hasil: status box (hasil trip) + grup tabel teknis — tiap nilai tampil
+     1× saja (tanpa kalimat ringkasan / rumus yang mengulang angka tabel) */
   .readout .rgroup{margin-top:11px;}
   .readout .rgroup-title{display:flex;align-items:center;gap:8px;font-family:'Space Grotesk',sans-serif;font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:2px;}
   .readout .rgroup-title::after{content:'';flex:1;height:1px;background:var(--line);}
@@ -156,7 +153,6 @@
   .readout .rline span:first-child{color:var(--ink-soft);font-family:'Inter',sans-serif;font-size:11px;flex:none;}
   .readout .rline.key span:last-child{font-weight:600;color:var(--ink);}
   .readout .rline span:last-child{text-align:right;}
-  .formula-box{margin-top:6px;overflow-x:auto;padding:4px 0;}
   .sir-note{font-size:11px;margin-top:8px;padding:8px 10px;border-radius:7px;}
 
   /* pemilih mode kartu kanan: 'Relay terpilih' vs 'Sekuens trip' */
@@ -402,7 +398,6 @@
             <div class="tlabel" id="timeLabel">—</div>
           </div>
           <div class="readout" id="readout"></div>
-          <div class="formula-box" id="formulaOut"></div>
           <div class="sir-note" id="sirNote"></div>
         </div>
       </div>
@@ -450,7 +445,6 @@
 </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
 <script>
 /* ---------- complex helpers ---------- */
 const C=(r,x)=>({R:r,X:x});
@@ -1448,25 +1442,13 @@ function renderSLD(m){
 }
 
 /* ---------- readout ---------- */
-/* Mode 'Sekuens trip' (P.sideMode==='seq'): status menyorot relay trip PERTAMA,
-   readout = urutan trip seluruh relay enabled (dari tripSequence) + grup relay yang
-   tak trip (alasan). Formula & catatan SIR (detail relay terpilih) dikosongkan. */
+/* Mode 'Sekuens trip' (P.sideMode==='seq'): kartu kanan = urutan trip seluruh relay
+   enabled (dari tripSequence) + grup relay yang tak trip (alasan). Kotak status
+   DISEMBUNYIKAN — isinya (relay pertama, zona, waktu) persis baris pertama daftar,
+   menampilkannya lagi hanya dobel informasi. Catatan SIR (detail relay terpilih)
+   dikosongkan. */
 function updateSeqReadout(m){
   const seq=tripSequence(m);
-  const zoneNames={1:'TRIP — ZONE 1',2:'TRIP — ZONE 2',3:'TRIP — ZONE 3'};
-  const ZC={0:'var(--green)',1:'var(--red)',2:'var(--copper)',3:'var(--blue)'};
-  const ZS={0:'var(--green-soft)',1:'var(--red-soft)',2:'var(--copper-soft)',3:'var(--blue-soft)'};
-  const first=seq.trip[0], z=first?first.zone:0;
-  $('statusBox').style.background=ZS[z];
-  $('zoneLabel').style.color=ZC[z];
-  $('timeLabel').style.color=ZC[z];
-  if(first){
-    $('zoneLabel').textContent=`${first.id}: ${zoneNames[z]}`;
-    $('timeLabel').textContent = z===1?'waktu operasi: seketika':`waktu operasi: ${fmt(first.time,2)} s`;
-  } else {
-    $('zoneLabel').textContent='TIDAK ADA TRIP';
-    $('timeLabel').textContent='tidak ada relay yang trip';
-  }
   const tFmt=r=> r.zone===1?'seketika':`${fmt(r.time,2)} s`;
   const rowsTrip=seq.trip.map((r,i)=>`
       <div class="rline"><span>${i+1}. <b>${r.id}</b> · Zona ${r.zone}</span><span>${tFmt(r)}</span></div>`).join('');
@@ -1477,8 +1459,9 @@ function updateSeqReadout(m){
       ${rowsTrip||'<div class="rline"><span>—</span><span>tidak ada relay trip</span></div>'}
     </div>
     ${rowsNot?`<div class="rgroup"><div class="rgroup-title">Tidak trip</div>${rowsNot}</div>`:''}`;
-  /* sembunyikan zona detail relay terpilih SEPENUHNYA (tanpa sisa blok hijau) */
-  $('formulaOut').innerHTML=''; $('formulaOut').style.display='none';
+  /* status box disembunyikan (dobel dgn baris pertama daftar) — tanpa sisa warna */
+  $('statusBox').style.display='none'; $('statusBox').style.background='';
+  $('zoneLabel').textContent=''; $('timeLabel').textContent='';
   $('sirNote').textContent=''; $('sirNote').style.display='none'; $('sirNote').style.background='';
 }
 function updateReadout(m,decisions){
@@ -1487,8 +1470,8 @@ function updateReadout(m,decisions){
   $('sirOut').innerHTML=`SIR = |Zs|/|Z1| = <b>${fmt(m.SIR,2)}</b>`;
   $('loadzOut').textContent=`Lensa beban ${fmt(m.loadzMin,1)}–${fmt(m.loadzNom,1)} Ω · titik sistem ${fmt(mag(m.zlNow),1)} Ω ∠${fmt(P.loadAngNow,0)}°`;
   if(P.sideMode==='seq'){ updateSeqReadout(m); return; }
-  /* mode relay terpilih: zona formula & SIR ditampilkan kembali (di mode seq disembunyikan) */
-  $('formulaOut').style.display='';
+  /* mode relay terpilih: status box (hasil trip) & catatan SIR ditampilkan kembali */
+  $('statusBox').style.display='';
   $('sirNote').style.display='';
 
   const sel=S.relays.find(r=>r.id===S.selectedRelayId);
@@ -1497,25 +1480,20 @@ function updateReadout(m,decisions){
   const ZC={0:'var(--green)',1:'var(--red)',2:'var(--copper)',3:'var(--blue)'};
   const ZS={0:'var(--green-soft)',1:'var(--red-soft)',2:'var(--copper-soft)',3:'var(--blue-soft)'};
   const zone=relayZones(sel,m);
+  const fzSel=relayFaultZ(sel,m);
+  const errOn=(P.ctErr!==0||P.ptErr!==0);
+  const behindNote=fzSel.behind?' (di belakang)':'';
+  const errDelta=mag(fzSel.z)-mag(fzSel.zm);
+  const zc=c=>fmt(c.R,3)+' + j'+fmt(c.X,3)+' Ω';                       // format kompleks sekunder/primer
+  const reach=[1,2,3].map(n=>fmt(mag(zone['zone'+n]),3));             // |zona| sekunder utk baris jangkauan
   $('statusBox').style.background=ZS[dec.zone];
   $('zoneLabel').style.color=ZC[dec.zone]; $('zoneLabel').textContent=`${sel.id}: ${zoneNames[dec.zone]}`;
   $('timeLabel').style.color=ZC[dec.zone];
-  $('timeLabel').textContent = dec.zone===0?'di luar seluruh zona': dec.zone===1?'waktu operasi: seketika':`waktu operasi: ${fmt(dec.time,2)} s`;
-
-  const fzSel=relayFaultZ(sel,m);
-  const errOn=(P.ctErr!==0||P.ptErr!==0);
-  const errDelta=mag(fzSel.z)-mag(fzSel.zm);
-  const zc=c=>fmt(c.R,3)+' + j'+fmt(c.X,3)+' Ω';                       // format kompleks sekunder/primer
-  const reach=[1,2,3].map(n=>fmt(mag(zone['zone'+n]),3));             // |zona| sekunder utk ringkasan & baris
-  const zHead=errOn?'Z terukur':'|Z|';                                // basis keputusan selalu Z terukur (zm)
-  const zmag=fmt(mag(fzSel.zm),3);
-  const behindNote=fzSel.behind?' (di belakang)':'';
-  /* Kalimat ringkasan: 1 baris bahasa manusia + angka kunci; detail di bawahnya. */
-  let summary;
-  if(fzSel.behind) summary='Gangguan berada <b>di belakang relay</b> — tidak boleh trip.';
-  else if(dec.zone===0) summary=`Relay melihat <b>${zHead} ${zmag} Ω</b> — melebihi jangkauan semua zona (terjauh <b>${reach[2]} Ω</b>) → <b>tidak trip</b>.`;
-  else if(dec.zone===1) summary=`Relay melihat <b>${zHead} ${zmag} Ω</b> — di dalam <b>Zona 1</b> (batas <b>${reach[0]} Ω</b>) → <b>trip seketika</b>.`;
-  else summary=`Relay melihat <b>${zHead} ${zmag} Ω</b> — melewati Zona ${dec.zone-1} (${reach[dec.zone-2]} Ω), masuk <b>Zona ${dec.zone}</b> (${reach[dec.zone-1]} Ω) → <b>trip ${fmt(dec.time,2)} s</b>.`;
+  /* tak trip: bedakan fault di belakang relay vs di luar jangkauan (dulu dikalimat
+     ringkasan — kini 1× di baris status) */
+  $('timeLabel').textContent = dec.zone===0
+    ? (fzSel.behind?'di belakang relay':'di luar seluruh zona')
+    : dec.zone===1 ? 'waktu operasi: seketika' : `waktu operasi: ${fmt(dec.time,2)} s`;
   const errRows=errOn
     ? `<div class="rline"><span>Z terukur (CT${P.ctErr>0?'+':''}${fmt(P.ctErr,1)}% / PT${P.ptErr>0?'+':''}${fmt(P.ptErr,1)}%)</span><span>${zc(fzSel.zm)}${behindNote}</span></div>
       <div class="rline"><span>Δ|Z| error</span><span>${errDelta>=0?'−':'+'}${fmt(Math.abs(errDelta),3)} Ω (${errDelta>0?'overreach':errDelta<0?'underreach':'—'})</span></div>`
@@ -1524,10 +1502,8 @@ function updateReadout(m,decisions){
   const apparentRow=(mag(sub(fzSel.zlPrim,fzSel.zPrim))>1e-9)
     ? `<div class="rline"><span>Z apparent (primer)</span><span>${zc(fzSel.zPrim)}${behindNote}</span></div>` : '';
   $('readout').innerHTML=`
-    <div class="r-sum">${summary}</div>
     <div class="rgroup"><div class="rgroup-title">Impedansi gangguan</div>
       <div class="rline key"><span>Z apparent (sekunder)</span><span>${zc(fzSel.z)}${behindNote}</span></div>
-      <div class="rline"><span>|Z| ∠θ</span><span>${fmt(mag(fzSel.z),3)} Ω ∠${fmt(deg(ang(fzSel.z)),1)}°</span></div>
       ${errRows}
     </div>
     <div class="rgroup"><div class="rgroup-title">Lokasi gangguan &amp; jangkauan</div>
@@ -1538,13 +1514,6 @@ function updateReadout(m,decisions){
       <div class="rline"><span>Reach zona 3</span><span>${reach[2]} Ω</span></div>
     </div>
   `;
-
-  /* rumus memakai frame RELAY TERPILIH (fzSel.z) — bukan ZapparentS yg frame-Bus-A
-     (tak cocok saat relay rev R3/R4 dipilih); konsisten dgn baris tabel. */
-  const eq = errOn
-    ? `Z_{terukur}=Z_{asli}\\cdot\\frac{1-e_{PT}}{1-e_{CT}}=(${fmt(fzSel.zm.R,3)}+j${fmt(fzSel.zm.X,3)})\\,\\Omega`
-    : `Z_{apparent}=(${fmt(fzSel.z.R,3)}+j${fmt(fzSel.z.X,3)})\\,\\Omega`;
-  if(typeof katex==='function') katex.render(eq,$('formulaOut'),{displayMode:true,throwOnError:false});
 
   const sirBox=$('sirNote');
   if(m.SIR>4){ sirBox.style.background='var(--red-soft)'; sirBox.style.color='var(--red)'; sirBox.textContent='SIR tinggi (>4) — sensitivitas thd gangguan resistif menurun, khususnya Mho.'; }

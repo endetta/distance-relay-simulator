@@ -12,7 +12,7 @@ package manager, atau backend. Ini simulator **edukasi bahasa Indonesia** untuk 
 *distance relay*: memetakan karakteristik relay (Impedance/Reactance/Mho/Quadrilateral) di
 bidang R–X, plus SLD interaktif dan kartu pembacaan hasil trip (detail relay terpilih atau
 sekuens trip seluruh relay).
-Satu-satunya dependensi eksternal: KaTeX + Google Fonts via CDN (opsional, core tetap jalan).
+Satu-satunya dependensi eksternal: Google Fonts via CDN (opsional, core tetap jalan).
 
 **Loop inti:** semua kontrol menulis ke satu objek state `S` (param di `S.param`/`P`) →
 `render()` → `computeModel()` → `decideRelay()` per relay → empat renderer murni yang
@@ -93,16 +93,20 @@ Buka file langsung di browser (`file:///`), atau `python -m http.server` / `npx 
   membaca |Z| terlalu kecil (pos=30 → 3.24 Ω, salah ZONA 2; benar 4.42 Ω → ZONA 3).
   Diperbaiki `seg(L1-pos,…)` + tes regresi S7 di readout.test.js. Gotcha: `pos` selalu
   diukur dari sumber A (Bus A=0); jarak sisi-B ke fault di L1 = `L1−pos`.
-- **Kartu readout** (`.side-card`, `updateReadout`): kotak status → kalimat ringkasan `.r-sum`
-  (bahasa manusia, angka kunci `<b>`) → tabel 2 grup berjudul (`Impedansi gangguan`,
-  `Lokasi gangguan & jangkauan`; grup `Relay & karakteristik` DIHAPUS); baris
-  `Z apparent (primer)` hanya muncul jika ≠ Z asli; label reach `Reach zona 1/2/3`.
+- **Kartu readout DE-DUPLIKASI** (`.side-card`, `updateReadout`): tanpa kalimat
+  ringkasan `.r-sum`, tanpa baris `|Z| ∠θ` & tanpa rumus KaTeX (`#formulaOut` dihapus) —
+  ketiganya mengulang status box / baris `Z apparent (sekunder)` / tabel reach. Kartu =
+  kotak status (hasil trip; utk TIDAK TRIP baris waktunya membedakan `di belakang relay`
+  vs `di luar seluruh zona`) → tabel 2 grup berjudul (`Impedansi gangguan`, `Lokasi
+  gangguan & jangkauan`; grup `Relay & karakteristik` DIHAPUS); baris `Z apparent
+  (primer)` hanya muncul jika ≠ Z asli; label reach `Reach zona 1/2/3`.
 - **Kartu kanan dua mode + batas bawah halaman (sesi ini)**: tombol `#sideModeGroup`
-  (`P.sideMode` default `'relay'`) — `Relay terpilih` = konten lama (grup `Relay &
-  karakteristik` DIHAPUS); `Sekuens trip` = `tripSequence(m)` (relay enabled urut
-  waktu→zona→id; non-trip disertakan dgn alasan, kotak status menyorot trip pertama).
-  Zona formula/SIR disembunyikan penuh di mode sekuens (tanpa sisa blok hijau). Kartu
-  waktu–impedansi (`#staircase`) & kotak catatan `#typeNote` DIHAPUS.
+  (`P.sideMode` default `'relay'`) — `Relay terpilih` = status box + 2 grup tabel (tanpa
+  ringkasan/rumus dobel); `Sekuens trip` = `tripSequence(m)` (relay enabled urut
+  waktu→zona→id; non-trip disertakan dgn alasan). Kotak status DISEMBUNYIKAN di mode
+  sekuens (dobel dgn baris pertama daftar) & catatan SIR disembunyikan penuh (tanpa sisa
+  blok hijau). Kartu waktu–impedansi (`#staircase`), kotak catatan `#typeNote` & kotak
+  rumus `#formulaOut` DIHAPUS.
 - **Kunci tinggi desktop (sesi ini)**: di ≥921px lebar & ≥600px tinggi halaman terkunci
   1 layar (`body overflow:hidden`; hanya panel/card yg scroll internal); kanvas R–X
   di-fit ke sisa tinggi lewat `fitPlane()`; di luar itu (layar kecil) scroll normal.
@@ -169,13 +173,14 @@ dan arus loop gangguan per sumber + total dalam kA primer. Uji literalnya ada di
   lensa beban (lensa overlay full-canvas; memakainya utk skala merusak grid).
 - Warna pakai variabel tema `:root` (`--blue/--copper/--ink/-soft`, `--teal`,
   `--copper-deep`); hindari hex hard-code di SVG.
-- KaTeX utk rumus; teks UI bahasa Indonesia (mis. `tidak trip`, `waktu operasi`, `nyala`).
+- Teks UI bahasa Indonesia (mis. `tidak trip`, `waktu operasi`, `nyala`); rumus
+  LaTeX/KaTeX sudah dihapus (dobel dgn tabel readout).
 - Semua kontrol → `render()`; jangan simpan state UI di luar `S`.
 
 ## Validasi (tanpa build)
 
 ```bash
-node tools/readout.test.js     # 26 asersi kartu readout (2 grup) + regresi R4 S7
+node tools/readout.test.js     # 25 asersi kartu readout (2 grup, tanpa duplikat) + regresi R4 S7
 node tools/sld-v-i.test.js     # 14 asersi model V/I + chip SLD
 node tools/flow-anim.test.js   # 17 asersi panah aliran (flowSegments + #sld)
 node tools/side-mode.test.js   # 15 asersi mode dua-mode & pemangkasan layout

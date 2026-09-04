@@ -1,12 +1,15 @@
-/* Tes TDD kartu readout (.side-card, mode 'relay') — struktur "ringkasan + 2 grup".
-   Menjalankan <script> simulator lewat tools/lens-harness.js (stub DOM), lalu
-   mengubah state S/P per skenario dan menegaskan DOM yang dihasilkan render().
+/* Tes TDD kartu readout (.side-card, mode 'relay') — struktur TANPA duplikat:
+   status box (hasil trip) lalu grup tabel berjudul; tidak ada kalimat ringkasan
+   (.r-sum), baris |Z| ∠θ (dobel dgn Z apparent), maupun rumus KaTeX (dobel dgn
+   baris Z apparent). Menjalankan <script> simulator lewat tools/lens-harness.js
+   (stub DOM), lalu mengubah state S/P per skenario dan menegaskan DOM render().
 
    Seam yang diuji (disepakati dgn user):
-     1. #statusBox  — teks zona & waktu (perilaku lama dipertahankan)
-     2. #readout    — kalimat ringkasan (div .r-sum) sesuai skenario
-     3. #readout    — struktur tabel: 2 grup berjudul urut (grup 'Relay & karakteristik'
-                      DIHAPUS), label baru, label lama hilang
+     1. #statusBox  — teks zona & waktu; utk TIDAK TRIP dibedakan
+                      'di belakang relay' vs 'di luar seluruh zona'
+     2. #readout    — langsung 2 grup berjudul ('Impedansi gangguan' →
+                      'Lokasi gangguan & jangkauan'), tiap nilai 1× saja
+     3. #readout    — label baru hadir, label lama hilang (incl. |Z| ∠θ)
 */
 'use strict';
 const path = require('path');
@@ -41,11 +44,11 @@ function scenario(fn) {
 /* ============ struktur kartu (dipakai beberapa skenario) ============ */
 function assertStructure(readout, label) {
   const gi = s => readout.indexOf(s);
-  check(`[${label}] struktur: ringkasan (.r-sum) sebelum grup`, () => {
-    const a = gi('class="r-sum"'), b = gi('class="rgroup-title"');
-    if (a < 0) throw new Error('tidak ada .r-sum');
+  check(`[${label}] struktur: ringkasan (.r-sum) HILANG — readout langsung grup tabel`, () => {
+    notContains(readout, 'r-sum', label);
+    notContains(readout, 'Relay melihat', label);
+    const b = gi('class="rgroup-title"');
     if (b < 0) throw new Error('tidak ada .rgroup-title');
-    if (!(a < b)) throw new Error('.r-sum harus sebelum judul grup');
   });
   check(`[${label}] struktur: 2 judul grup dgn urutan benar (grup 'Relay & karakteristik' dihapus)`, () => {
     const t1 = gi('Impedansi gangguan'), t2 = gi('Lokasi gangguan &amp; jangkauan');
@@ -58,9 +61,11 @@ function assertStructure(readout, label) {
     notContains(readout, 'Relay &amp; karakteristik', label);
     notContains(readout, 'Karakteristik', label);
   });
-  check(`[${label}] struktur: label teknis baru hadir`, () => {
-    ['Z apparent (sekunder)', '|Z| \u2220\u03b8', 'Reach zona 1', 'Reach zona 2', 'Reach zona 3', 'Z asli (primer)']
+  check(`[${label}] struktur: label teknis hadir — tanpa baris |Z| ∠θ (dobel)`, () => {
+    ['Z apparent (sekunder)', 'Reach zona 1', 'Reach zona 2', 'Reach zona 3', 'Z asli (primer)']
       .forEach(s => contains(readout, s, label));
+    notContains(readout, '|Z| \u2220\u03b8', label);
+    notContains(readout, '\u2220\u03b8', label);
   });
   check(`[${label}] struktur: label lama yang digantikan hilang`, () => {
     ['Zone 1 reach', 'Zone 2 reach', 'Zone 3 reach', 'saluran, primer', 'Z apparent (primer)']
@@ -78,9 +83,9 @@ console.log('\nSkenario 1 — fault di L1 dekat bus (pos=20) → R1 TRIP ZONE 1 
     contains(status, 'R1: TRIP \u2014 ZONE 1', 'S1 status');
     contains(time, 'seketika', 'S1 status');
   });
-  check('S1: ringkasan menyebut Zona 1 & trip seketika', () => {
-    contains(readout, '<b>Zona 1</b>', 'S1 summary');
-    contains(readout, 'seketika', 'S1 summary');
+  check('S1: status adalah satu-satunya penyampai hasil trip (tanpa ringkasan/rumus dobel)', () => {
+    notContains(readout, 'r-sum', 'S1 readout');
+    notContains(readout, 'trip seketika', 'S1 readout');
   });
 }
 
@@ -92,9 +97,9 @@ console.log('\nSkenario 2 — fault di L2 (pos=135) → R1 TRIP ZONE 2 t=0.40s')
     contains(status, 'R1: TRIP \u2014 ZONE 2', 'S2 status');
     contains(time, '0.40 s', 'S2 status');
   });
-  check('S2: ringkasan menyebut Zona 2 & waktu 0.40 s', () => {
-    contains(readout, 'masuk <b>Zona 2</b>', 'S2 summary');
-    contains(readout, '0.40 s', 'S2 summary');
+  check('S2: tabel memuat Reach zona 2 tanpa kalimat ringkasan', () => {
+    contains(readout, 'Reach zona 2', 'S2 readout');
+    notContains(readout, 'r-sum', 'S2 readout');
   });
   check('S2: status tetap mengidentifikasi relay terpilih (R1)', () => {
     contains(status, 'R1: TRIP \u2014 ZONE 2', 'S2 status id');
@@ -109,33 +114,35 @@ console.log('\nSkenario 3 — fault di ujung L2 (pos=160) → R1 TRIP ZONE 3 t=1
     contains(status, 'R1: TRIP \u2014 ZONE 3', 'S3 status');
     contains(time, '1.20 s', 'S3 status');
   });
-  check('S3: ringkasan menyebut Zona 3 & waktu 1.20 s', () => {
-    contains(readout, 'masuk <b>Zona 3</b>', 'S3 summary');
-    contains(readout, '1.20 s', 'S3 summary');
+  check('S3: readout tanpa ringkasan — hanya grup tabel', () => {
+    notContains(readout, 'r-sum', 'S3 readout');
+    contains(readout, 'Reach zona 3', 'S3 readout');
   });
 }
 
 console.log('\nSkenario 4 — R3 terpilih, fault di belakang relay (pos=120) → TIDAK TRIP');
 {
   const { status, time, readout } = scenario((S, P) => { S.selectedRelayId = 'R3'; P.pos = 120; });
-  check('S4: statusBox R3 TIDAK TRIP + di luar seluruh zona', () => {
+  check('S4: statusBox R3 TIDAK TRIP + alasan "di belakang relay" di baris waktu', () => {
     contains(status, 'R3: TIDAK TRIP', 'S4 status');
-    contains(time, 'di luar seluruh zona', 'S4 status');
+    contains(time, 'di belakang relay', 'S4 status');
   });
-  check('S4: ringkasan menyebut "di belakang relay"', () => {
-    contains(readout, 'di belakang relay', 'S4 summary');
+  check('S4: nilai Z apparent diberi penanda (di belakang)', () => {
+    contains(readout, '(di belakang)', 'S4 readout');
+    notContains(readout, 'r-sum', 'S4 readout');
   });
 }
 
 console.log('\nSkenario 5 — Rf besar (40 \u03a9) di ujung L2 → TIDAK TRIP (di luar semua zona)');
 {
-  const { status, readout } = scenario((S, P) => { P.pos = 179.9; P.rf = 40; });
-  check('S5: statusBox TIDAK TRIP', () => {
+  const { status, time, readout } = scenario((S, P) => { P.pos = 179.9; P.rf = 40; });
+  check('S5: statusBox TIDAK TRIP + di luar seluruh zona', () => {
     contains(status, 'R1: TIDAK TRIP', 'S5 status');
+    contains(time, 'di luar seluruh zona', 'S5 status');
   });
-  check('S5: ringkasan menyebut tidak trip + jangkauan terjauh', () => {
-    contains(readout, 'tidak trip', 'S5 summary');
-    contains(readout, 'terjauh', 'S5 summary');
+  check('S5: readout tanpa ringkasan', () => {
+    notContains(readout, 'r-sum', 'S5 readout');
+    notContains(readout, 'terjauh', 'S5 readout');
   });
 }
 
@@ -149,23 +156,24 @@ console.log('\nSkenario 7 — R4 (Bus C) terpilih, fault di L1 (pos=30) → ZONA
     contains(status, 'R4: TRIP \u2014 ZONE 3', 'S7 status');
     contains(time, '1.20 s', 'S7 status');
   });
-  check('S7: ringkasan menyebut Zona 3', () => {
-    contains(readout, 'masuk <b>Zona 3</b>', 'S7 summary');
+  check('S7: readout tanpa ringkasan — tabel tetap lengkap', () => {
+    notContains(readout, 'r-sum', 'S7 readout');
+    contains(readout, 'Reach zona 3', 'S7 readout');
   });
 }
 
-console.log('\nSkenario 6 — error PT 5% (pos=135) → Z terukur tampil di ringkasan & tabel');
+console.log('\nSkenario 6 — error PT 5% (pos=135) → baris Z terukur & Δ|Z| di tabel');
 {
-  const { status, readout } = scenario((S, P) => { P.pos = 135; P.ptErr = 5; });
+  const { status, time, readout } = scenario((S, P) => { P.pos = 135; P.ptErr = 5; });
   check('S6: statusBox tetap zone 2', () => {
     contains(status, 'R1: TRIP \u2014 ZONE 2', 'S6 status');
   });
-  check('S6: ringkasan memakai Z terukur', () => {
-    contains(readout, 'Z terukur', 'S6 summary');
-  });
-  check('S6: baris Z terukur + Δ|Z| error hadir', () => {
+  check('S6: baris Z terukur + Δ|Z| error hadir (bukan duplikat di ringkasan)', () => {
     contains(readout, '\u0394|Z|', 'S6 row');
     contains(readout, 'Z terukur', 'S6 row');
+    contains(readout, 'Z apparent (sekunder)', 'S6 row');
+    notContains(readout, 'r-sum', 'S6 readout');
+    notContains(readout, '\u2220\u03b8', 'S6 readout');
   });
 }
 

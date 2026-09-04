@@ -3,21 +3,28 @@
      1. PEMANGKASAN: kartu staircase (time–impedansi) & kotak catatan #typeNote
         dihapus dari halaman → render() tak lagi menulis ke #staircase/#typeNote.
         Kolom kanan berakhir di plane-row → tinggi panel parameter terkunci di situ.
-     2. MODE KARTU KANAN (P.sideMode, default 'relay'):
-        - 'relay' (default) = konten lama — dijamin tetap oleh tools/readout.test.js.
+     2. DE-DUPLIKASI (sesi ini): kotak status di mode 'seq' DISEMBUNYIKAN (isinya
+        dobel dgn baris pertama daftar urutan); elemen rumus #formulaOut + KaTeX
+        dihapus dari halaman (rumus mengulang baris Z apparent); readout mode
+        'relay' langsung grup tabel tanpa kalimat ringkasan (.r-sum).
+     3. MODE KARTU KANAN (P.sideMode, default 'relay'):
+        - 'relay' (default) = konten status + 2 grup tabel — dijamin oleh
+          tools/readout.test.js.
         - 'seq' (Sekuens trip) = tripSequence(m) utk relay ENABLED:
           baris trip urut waktu operasi naik → zona naik → id (Z1 = seketika/0 s),
           lalu baris non-trip (abu-abu) dgn alasan 'di belakang relay'/'di luar jangkauan'.
-          Kotak status menyorot relay trip PERTAMA; #formulaOut & #sirNote dikosongkan.
+          #sirNote dikosongkan; tanpa status box dobel.
 
    Skenario literal (default: L1=100 km, L2=80 km, mho, semua relay enabled):
      pos=135 (35 km di L2): R2 & R4 lihat Z1 (seketika), R1 lihat Z2 (0.40 s),
      R3 di belakang → urutan: R2, R4, R1, lalu R3 (tidak trip).
 */
 'use strict';
+const fs = require('fs');
 const path = require('path');
 const { loadSimulator } = require('./lens-harness.js');
 const HTML = path.join(__dirname, '..', 'distance_relay_simulator.html');
+const src = fs.readFileSync(HTML, 'utf8');
 
 let passed = 0, failed = 0;
 function check(name, fn) {
@@ -42,7 +49,7 @@ const idsOf = seq => seq.trip.map(x => x.id).join(',');
 const idsOfAll = seq => seq.trip.map(x => x.id).concat(seq.not.map(x => x.id)).join(',');
 
 /* ============ 1. pemangkasan: staircase & typeNote tak lagi ditulis ============ */
-console.log('\nPemangkasan layout — staircase & catatan tipe');
+console.log('\nPemangkasan layout — staircase, catatan tipe, rumus dobel');
 {
   const { ctx } = scenario(() => {});
   check('render() tidak menulis ke #staircase (kartu time–impedansi dihapus)', () => {
@@ -53,8 +60,16 @@ console.log('\nPemangkasan layout — staircase & catatan tipe');
     const v = ctx.els.typeNote;
     if (v && v.textContent !== '') throw new Error(`#typeNote terisi: ${v.textContent.slice(0, 80)}`);
   });
-  check('mode default = relay terpilih: kartu readout tetap terisi penuh', () => {
-    contains(ctx.els.readout.innerHTML, 'class="r-sum"', 'readout default');
+  check('#formulaOut & KaTeX hilang dari halaman (rumus dobel dgn baris Z apparent)', () => {
+    notContains(src, 'formulaOut', 'src html');
+    notContains(src, 'katex', 'src html');
+    notContains(src, 'KaTeX', 'src html');
+  });
+  check('mode default = relay terpilih: readout langsung grup tabel (tanpa .r-sum)', () => {
+    const h = ctx.els.readout.innerHTML;
+    notContains(h, 'r-sum', 'readout default');
+    contains(h, 'class="rgroup-title"', 'readout default');
+    contains(h, 'Impedansi gangguan', 'readout default');
     contains(ctx.els.zoneLabel.textContent, 'TRIP', 'status default');
   });
 }
@@ -105,12 +120,13 @@ console.log('\ntripSequence — urutan operasi relay (enabled)');
 }
 
 /* ============ 3. mode readout 'seq' di DOM ============ */
-console.log('\nMode Sekuens trip — kartu kanan');
+console.log('\nMode Sekuens trip — kartu kanan (status box disembunyikan)');
 {
   const { ctx, pub } = scenario((S, P) => { P.pos = 135; P.sideMode = 'seq'; });
-  check('status: sorot relay trip pertama R2 ZONE 1', () => {
-    contains(ctx.els.zoneLabel.textContent, 'R2: TRIP — ZONE 1', 'zoneLabel seq');
-    contains(ctx.els.timeLabel.textContent, 'seketika', 'timeLabel seq');
+  check('mode seq: status box DISEMBUNYIKAN (dobel dgn baris pertama daftar)', () => {
+    if (ctx.els.statusBox.style.display !== 'none') throw new Error(`statusBox display=${ctx.els.statusBox.style.display}, harus none`);
+    if (ctx.els.zoneLabel.textContent !== '' || ctx.els.timeLabel.textContent !== '')
+      throw new Error('zone/time label harus dikosongkan (kotak disembunyikan)');
   });
   check('readout: urutan R2 → R4 → R1 lalu grup Tidak trip berisi R3', () => {
     const h = ctx.els.readout.innerHTML;
@@ -121,29 +137,28 @@ console.log('\nMode Sekuens trip — kartu kanan');
     contains(h, 'Urutan trip', 'judul grup urutan');
     contains(h, '0.40 s', 'waktu R1 di daftar');
   });
-  check('mode seq: #formulaOut & #sirNote dikosongkan', () => {
-    if (ctx.els.formulaOut.innerHTML !== '') throw new Error('formulaOut harus kosong di mode seq');
+  check('mode seq: #sirNote dikosongkan & disembunyikan — tak ada blok hijau kosong', () => {
     if (ctx.els.sirNote.textContent !== '') throw new Error('sirNote harus kosong di mode seq');
-  });
-  check('mode seq: zona formula & SIR disembunyikan — tak ada blok hijau kosong', () => {
-    if (ctx.els.formulaOut.style.display !== 'none') throw new Error(`formulaOut display=${ctx.els.formulaOut.style.display}, harus none`);
     if (ctx.els.sirNote.style.display !== 'none') throw new Error(`sirNote display=${ctx.els.sirNote.style.display}, harus none`);
     if (ctx.els.sirNote.style.background) throw new Error(`sirNote masih bergaris-bawah: ${ctx.els.sirNote.style.background}`);
   });
-  check('kembali ke mode relay: konten readout/status pulih & zona formula/SIR tampil lagi', () => {
+  check('kembali ke mode relay: status tampil lagi & SIR terisi (tanpa .r-sum/rumus)', () => {
     pub.P.sideMode = 'relay';
     pub.render();
-    contains(ctx.els.readout.innerHTML, 'class="r-sum"', 'readout relay lagi');
+    if (ctx.els.statusBox.style.display === 'none') throw new Error('statusBox harus tampil lagi di mode relay');
     contains(ctx.els.zoneLabel.textContent, 'R1: TRIP — ZONE 2', 'status relay lagi');
+    const h = ctx.els.readout.innerHTML;
+    contains(h, 'class="rgroup-title"', 'readout relay lagi');
+    notContains(h, 'r-sum', 'readout relay lagi');
     if (ctx.els.sirNote.style.display === 'none') throw new Error('sirNote harus tampil lagi di mode relay');
     if (!ctx.els.sirNote.textContent) throw new Error('sirNote harus berisi teks di mode relay');
   });
 }
 {
   const { ctx } = scenario((S, P) => { P.pos = 50; P.sideMode = 'seq'; S.relays.forEach(r => { r.enabled = (r.id === 'R2'); }); });
-  check('tak ada relay trip: status TIDAK ADA TRIP', () => {
-    contains(ctx.els.zoneLabel.textContent, 'TIDAK ADA TRIP', 'zoneLabel kosong');
-    contains(ctx.els.timeLabel.textContent, 'tidak ada relay', 'timeLabel kosong');
+  check('tak ada relay trip: status tetap disembunyikan; daftar memuat placeholder', () => {
+    if (ctx.els.statusBox.style.display !== 'none') throw new Error('statusBox harus none saat tak ada trip di mode seq');
+    contains(ctx.els.readout.innerHTML, 'tidak ada relay trip', 'placeholder daftar');
   });
   check('daftar tetap memuat R2 dgn alasan di belakang', () => {
     contains(ctx.els.readout.innerHTML, 'R2', 'R2 di daftar');
