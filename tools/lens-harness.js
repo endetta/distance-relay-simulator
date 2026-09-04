@@ -1,7 +1,8 @@
 /* Harness mock-DOM utk menjalankan <script> simulator di Node.
-   Pola dari CLAUDE.md: stub document/window dgn elemen yg menangkap innerHTML,
-   lalu jalankan isi <script> via new Function, ekspor __pub{render,S,P,computeModel}.
-   Seam yang diuji tools/lens.test.js: string SVG #plane (path lensa) + nilai computeModel. */
+   Aplikasi sendiri mempublikasikan `const API` di akhir script-nya; harness cukup
+   menambahkan `;global.__pub=API;` — daftar ekspor TIDAK dikelola di sini (satu sumber
+   kebenaran di aplikasi, persis pola Differential Relay). Seam yang diuji: string SVG
+   #plane (path lensa) + model murni + modul RxMap (fitRxWindow/rxWindow/relayBounds). */
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -66,7 +67,7 @@ function loadSimulator(htmlPath) {
   global.matchMedia = () => ({ matches: true }); // anggap layar sempit → panel height tak ditulis
   global.ResizeObserver = class { observe() {} };
 
-  new Function(code + ';global.__pub={render,S,P,computeModel,computeFaultCircuit,relayZones,relayFaultZ,flowSegments,tripSequence,wheelZoomFactor,pinchZoomFactor,syncCollapsedCentering,loadRegion,loadRegionPoints,C,add,scl,mag,ang,rad,deg};')();
+  new Function(code + ';global.__pub=API;')();
 
   const pub = global.__pub;
   if (!pub || !pub.render) throw new Error('simulator did not export __pub');

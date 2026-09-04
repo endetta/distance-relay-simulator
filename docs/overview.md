@@ -30,12 +30,12 @@ Buka file langsung di browser (`file:///`), atau `python -m http.server` / `npx 
 | `CLAUDE.md` | Panduan arsitektur/konvensi untuk agen coding. |
 | `docs/overview.md` | Dokumen ini — ringkasan untuk orientasi cepat. |
 | `README.md` | Deskripsi publik + cara menjalankan + validasi. |
-| `tools/lens-harness.js` | Harness Node: stub `document`/`window`, jalankan `<script>`, ekspor `__pub{render,S,P,computeModel,computeFaultCircuit,…}` + elemen tertangkap (`els.<id>.innerHTML`). |
+| `tools/lens-harness.js` | Harness Node: stub `document`/`window`, jalankan `<script>`, tambahkan `;global.__pub=API;` — daftar ekspor hidup di `const API` akhir script aplikasi (incl. `relayBounds/fitRxWindow/rxWindow`) + elemen tertangkap (`els.<id>.innerHTML`). |
 | `tools/readout.test.js` | Tes kartu readout/status. Jalankan: `node tools/readout.test.js`. |
 | `tools/sld-v-i.test.js` | Tes model V/I + chip SLD. Jalankan: `node tools/sld-v-i.test.js`. |
 | `tools/flow-anim.test.js` | Tes revisi animasi aliran SLD (`flowSegments` + geometri panah). Jalankan: `node tools/flow-anim.test.js`. |
 | `tools/side-mode.test.js` | Tes pemangkasan layout & mode dua-mode kartu kanan (`tripSequence` + `P.sideMode`). Jalankan: `node tools/side-mode.test.js`. |
-| `tools/plane-zoom.test.js` | Tes zoom roda ±15%/100px + pinch dua-jari (`wheelZoomFactor`/`pinchZoomFactor`), jendela R–X dipepetkan ke kartu (×0.75 + pusat konten + clamp no-cut) & kanvas adaptif + halo putih pd label tick. Jalankan: `node tools/plane-zoom.test.js`. |
+| `tools/plane-zoom.test.js` | Tes zoom roda ±15%/100px + pinch dua-jari (`wheelZoomFactor`/`pinchZoomFactor`), jendela R–X dipepetkan ke kartu (×0.75 + pusat konten + clamp no-cut) & kanvas adaptif + halo putih pd label tick + **modul RxMap** (`fitRxWindow`/`rxWindow`/`relayBounds`, 35 asersi). Jalankan: `node tools/plane-zoom.test.js`. |
 | `tools/title-anim.test.js` | Tes animasi judul header (`tt-a`/`tt-b` + gradien `--ink→--copper-deep` + kilau `ttShine` + crossfade `ttSwapA/B` + reduced-motion), animasi collapse (`card-b-i` grid 1fr→0fr) & pemusatan saat semua ciut (`syncCollapsedCentering`). Jalankan: `node tools/title-anim.test.js`. |
 | `tools/lens.test.js` | Tes lensa beban (wedge simetris ber-fillet + titik sistem dinamis) & model loadability PRC-023. Jalankan: `node --test tools/lens.test.js`. |
 | `design-plans/` | Arsip design plan; yang ada berlabel **OBSOLETE** — jangan dieksekusi. |
@@ -184,7 +184,7 @@ node tools/readout.test.js     # 25 asersi kartu readout (2 grup, tanpa duplikat
 node tools/sld-v-i.test.js     # 14 asersi model V/I + chip SLD
 node tools/flow-anim.test.js   # 17 asersi panah aliran (flowSegments + #sld)
 node tools/side-mode.test.js   # 15 asersi mode dua-mode & pemangkasan layout
-node tools/plane-zoom.test.js  # 26 asersi zoom roda/pinch & jendela R–X
+node tools/plane-zoom.test.js  # 35 asersi zoom roda/pinch, jendela R–X & modul RxMap
 node tools/title-anim.test.js  # 9 asersi animasi judul & collapse
 node --test tools/lens.test.js # 15 asersi lensa beban & model PRC-023
 ```

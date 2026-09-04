@@ -209,5 +209,75 @@ console.log('\nrenderPlane — label tick dgn halo putih (paint-order stroke)');
   });
 }
 
+/* ===== C1 · modul RxMap: satu pemilik geometri+fit+transformasi data↔piksel =====
+   Setelah refactor: fitRxWindow (murni) menghitung jendela data (WIDE 0.75, clamp
+   no-cut @atFit, k-clamp [0.12,64]); rxWindow = fase-1 render (penulis S.ui.view),
+   instance-nya jadi svg._map; renderPlane = fase-gambar (tidak menulis view).
+   Literal di bawah dihitung manual dari spec: kanvas 640×470 → plot 590×434
+   (padL 38/padR 12/padT 10/padB 26); bounds R∈[0,4], X∈[0,4·434/590] → frame
+   rasio pas (tanpa penyesuaian rasio); WIDE ×0.75. */
+const rx = loadSimulator(HTML);
+const fit = rx.pub.fitRxWindow;
+const CANV = { w: 640, h: 470 };
+const BNDS = { minR:0, maxR:4, minX:0, maxX:2.9423728814, dMinR:1, dMaxR:3 };
+{
+  const w = fit({ k: 1, cx: null, cy: null }, BNDS, CANV);
+  check('C1 fitRxWindow: plot 590×434; k=1 → span = ×0.75 frame; pusat frame (tanpa clamp)', () => {
+    approx(w.plotW, 590, 'plotW'); approx(w.plotH, 434, 'plotH');
+    approx(w.padL, 38, 'padL'); approx(w.padT, 10, 'padT');
+    approx(w.spanRw, 3, 'spanRw (4×0.75)');
+    approx(w.spanXw, 2.2067796610, 'spanXw (2.9423729×0.75)', 1e-6);
+    approx(w.wcx, 2, 'wcx'); approx(w.wcy, 1.4711864405, 'wcy', 1e-6);
+  });
+  check('C1 fitRxWindow: isotropik — px/satuan R == px/satuan X (lingkaran bulat)', () => {
+    approx(w.plotW / w.spanRw, w.plotH / w.spanXw, 'skala isotropik', 1e-6);
+    approx(w.scale, w.plotH / w.spanXw, 'scale', 1e-9);
+  });
+  check('C1 toPx/pxToData: pusat data → pusat plot (333,227); round-trip identitas', () => {
+    const p = w.toPx({ R: 2, X: 1.4711864405 });
+    approx(p.x, 333, 'x pusat', 1e-6); approx(p.y, 227, 'y pusat', 1e-6);
+    const d = w.pxToData(p.x, p.y);
+    approx(d.R, 2, 'R roundtrip', 1e-6); approx(d.X, 1.4711864405, 'X roundtrip', 1e-6);
+  });
+}
+{
+  const w2 = fit({ k: 2, cx: null, cy: null }, BNDS, CANV);
+  check('C1 fitRxWindow: k=2 menyempitkan jendela (spanRw 3→1.5)', () => {
+    approx(w2.spanRw, 1.5, 'spanRw k=2', 1e-9); approx(w2.spanXw, 1.1033898305, 'spanXw k=2', 1e-6);
+  });
+  const whi = fit({ k: 1000, cx: null, cy: null }, BNDS, CANV);
+  const wlo = fit({ k: 0.001, cx: null, cy: null }, BNDS, CANV);
+  check('C1 fitRxWindow: k di-clamp [0.12, 64]', () => {
+    approx(whi.k, 64, 'k atas', 1e-9); approx(whi.spanRw, 3 / 64, 'spanRw k=64', 1e-9);
+    approx(wlo.k, 0.12, 'k bawah', 1e-9); approx(wlo.spanRw, 3 / 0.12, 'spanRw k=0.12', 1e-9);
+  });
+}
+{
+  const BW = { minR:0, maxR:4, minX:0, maxX:2.9423728814, dMinR:-0.6, dMaxR:4.6 };
+  const wc = fit({ k: 1, cx: null, cy: null }, BW, CANV);
+  check('C1 fitRxWindow: clamp NO-CUT hanya saat atFit — jendela R melebar, X ikut rasio', () => {
+    approx(wc.spanRw, 5.5, 'spanRw clamp', 1e-6);
+    approx(wc.spanXw, 5.5 * 434 / 590, 'spanXw clamp ikut rasio', 1e-6);
+    approx(wc.wcx, 2, 'pusat = fitCx0 (konten simetris)', 1e-6);
+  });
+  const wz = fit({ k: 2, cx: null, cy: null }, BW, CANV);
+  check('C1 fitRxWindow: k≠1 mematikan clamp (tidak melawan pan/zoom)', () => {
+    approx(wz.spanRw, 1.5, 'spanRw k=2 dgn konten lebar', 1e-9);
+  });
+}
+{
+  rx.pub.render();
+  const mp = rx.els.plane._map;
+  check('C1 rxWindow: render() → svg._map berisi instance (toPx/pxToData + geometri valid)', () => {
+    if (!mp) throw new Error('svg._map kosong setelah render');
+    if (typeof mp.toPx !== 'function' || typeof mp.pxToData !== 'function') throw new Error('instance tanpa metode toPx/pxToData');
+    if (!(mp.spanR > 0 && mp.plotW > 0 && mp.scale > 0)) throw new Error('geometri instance tidak valid');
+  });
+  check('C1 rxWindow: materialisasi — S.ui.view.cx/cy terdefinisi setelah render', () => {
+    const view = rx.pub.S.ui.view;
+    if (!(typeof view.cx === 'number' && typeof view.cy === 'number')) throw new Error('cx/cy tidak ter-materialisasi');
+  });
+}
+
 console.log(`\n${passed} lulus, ${failed} gagal`);
 process.exit(failed === 0 ? 0 : 1);

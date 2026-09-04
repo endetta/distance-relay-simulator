@@ -942,60 +942,51 @@ function loadRegionPoints(rIn,rOut,th){
   ], L};
 }
 
-/* ---------- R-X plane (fit + zoom/pan + semua relay, koordinat global) ---------- */
-function renderPlane(m,decisions){
-  const svg=$('plane');
-  /* kanvas ADAPTIF: gambar dgn ukuran elemen aktual agar diagram mengisi kartu hingga
-     legenda (fallback 640×470 utk stub tes tanpa layout). fitPlane menyetel style & viewBox
-     lalu render ulang saat ukuran berubah. */
-  const VBW=Math.round(svg.clientWidth)||640, VBH=Math.round(svg.clientHeight)||470;
-  /* padT=10: headroom minimal atas — toolbar zoom chip melayang DI DALAM plot
-     (pojok kanan-atas), tak ada band kosong yg memakan tinggi */
-  const padL=38,padR=12,padT=10,padB=26;
-  const plotW=VBW-padL-padR, plotH=VBH-padT-padB;
-  const view=S.ui.view;
-
-  /* batas data = union bentuk zona (global, via gz) + titik gangguan semua relay nyala.
-     Zona beban TIDAK diikutkan — overlay, tidak boleh mengubah skala. */
-  let minR=0,maxR=0,minX=0,maxX=0;
-  /* dMinR/dMaxR/dMinX/dMaxX = batas konten yg BENAR-BENAR DIGAMBAR (zona via gz,
-     termasuk pencerminan relay rev) — dipakai clamp no-cut di bawah. */
-  let dMinR=0,dMaxR=0,dMinX=0,dMaxX=0;
+/* ===== MODUL JENDELA R–X (RxMap): satu pemilik geometri + fit + transformasi data↔px =====
+   - relayBounds(m)  : frame data (zona + titik semua relay nyala, koordinat global via
+                       gz) + rentang R konten yg BENAR-BENAR DIGAMBAR (dMinR/dMaxR)
+                       untuk clamp no-cut. Zona beban TIDAK diikutkan (overlay).
+   - fitRxWindow(...): MURNI. Perilaku window lama dipindah VERBATIM dari renderPlane:
+                       rasio isotropik (lingkaran bulat), WIDE 0.75 (k=1 merapat),
+                       clamp no-cut hanya saat atFit (margin 0.15 Ω, X ikut rasio),
+                       k-clamp [0.12,64], materialisasi wcx/wcy. TIDAK menulis apa pun.
+   - rxWindow(m)     : fase-1 render; membaca kanvas aktual (fallback 640×470 utk stub
+                       tes); SATU-SATUNYA penulis S.ui.view (cx/cy). Instance-nya
+                       disalin render() ke svg._map untuk handler zoom/pan. */
+const RX_PADS={L:38,R:12,T:10,B:26};
+function relayBounds(m){
+  let minR=0,maxR=0,minX=0,maxX=0, dMinR=0,dMaxR=0;
   const grow=z=>{minR=Math.min(minR,z.R);maxR=Math.max(maxR,z.R);minX=Math.min(minX,z.X);maxX=Math.max(maxX,z.X);};
-  const growBounds=b=>{grow(C(b.minR,b.minX));grow(C(b.maxR,b.maxX));};
-  const dgrow=z=>{dMinR=Math.min(dMinR,z.R);dMaxR=Math.max(dMaxR,z.R);dMinX=Math.min(dMinX,z.X);dMaxX=Math.max(dMaxX,z.X);};
-  const dgrowBounds=(r,b)=>{[C(b.minR,b.minX),C(b.maxR,b.maxX),C(b.minR,b.maxX),C(b.maxR,b.minX)].forEach(p=>dgrow(gz(r,p,m)));};
+  const dgrow=z=>{dMinR=Math.min(dMinR,z.R);dMaxR=Math.max(dMaxR,z.R);};
   S.relays.forEach(r=>{
     if(!r.enabled) return;
     const zone=relayZones(r,m);
     [zone.zone1,zone.zone2,zone.zone3].forEach(zn=>{
-      const b=shapeBounds(charShape(r,zn,zone,m));   // geometri dari modul karakteristik
-      growBounds({minR:b.minR,maxR:b.maxR,minX:b.minX,maxX:b.maxX});
-      dgrowBounds(r,b);
+      const b=shapeBounds(charShape(r,zn,zone,m));
+      grow(C(b.minR,b.minX)); grow(C(b.maxR,b.maxX));
+      [C(b.minR,b.minX),C(b.maxR,b.maxX),C(b.minR,b.maxX),C(b.maxR,b.minX)].forEach(p=>dgrow(gz(r,p,m)));
     });
     const fzr=relayFaultZ(r,m);
-    if(!fzr.behind){ grow(gz(r,fzr.zl,m)); grow(gz(r,fzr.z,m)); grow(gz(r,fzr.zm,m)); dgrow(gz(r,fzr.zl,m)); dgrow(gz(r,fzr.z,m)); dgrow(gz(r,fzr.zm,m)); }
+    if(!fzr.behind){ grow(gz(r,fzr.zl,m)); grow(gz(r,fzr.z,m)); grow(gz(r,fzr.zm,m));
+      dgrow(gz(r,fzr.zl,m)); dgrow(gz(r,fzr.z,m)); dgrow(gz(r,fzr.zm,m)); }
   });
   if(maxR<=minR){maxR=1;} if(maxX<=minX){maxX=1;}
-
+  return {minR,maxR,minX,maxX,dMinR,dMaxR};
+}
+function fitRxWindow(view,bounds,canvas){
+  const VBW=canvas.w||640, VBH=canvas.h||470;
+  const padL=RX_PADS.L,padR=RX_PADS.R,padT=RX_PADS.T,padB=RX_PADS.B;
+  const plotW=VBW-padL-padR, plotH=VBH-padT-padB;
+  let minR=bounds.minR,maxR=bounds.maxR,minX=bounds.minX,maxX=bounds.maxX;
+  const dMinR=bounds.dMinR, dMaxR=bounds.dMaxR;
   let spanR=maxR-minR, spanX=maxX-minX;
   const targetRatio=plotW/plotH;
   if(spanR/spanX<targetRatio){const extra=spanX*targetRatio-spanR; maxR+=extra*0.85; minR-=extra*0.15;}
   else{const extra=spanR/targetRatio-spanX; maxX+=extra;}
   spanR=maxR-minR; spanX=maxX-minX;
   const cx0=(minR+maxR)/2, cy0=(minX+maxX)/2;   // pusat data (frame)
-  /* Jendela default DIPEPETKAN ke konten: ×0.75 (k=1 merapat — RX diagram mengisi
-     kartu; puncak zone-1 boleh sedikit terpotong, sudah disepakati user). Kedua span
-     dikalikan bersama → rasio dijaga, lingkaran tetap bulat. */
   const WIDE=0.75;
   spanR*=WIDE; spanX*=WIDE;
-  /* Fit default (k=1, window masih di posisi fit): jendela R DIPUSATKAN pd pusat
-     konten yg DIGAMBAR (kiri–kanan rata), lalu clamp NO-CUT — bila konten (zona
-     setelah gz, dgn margin 0.15 Ω) bakal terpotong kiri/kanan — mis. kanvas persegi —
-     jendela R dilebarkan secukupnya agar kurva tak pernah terpotong sisi. Guard
-     dihitung ulang tiap render (cx ≈ pusat fit atau origin) supaya clamp tetap aktif
-     setelah inisialisasi & saat resize; pan/zoom (k≠1 atau cx/cy bergeser) mematikannya
-     agar tak melawan interaksi. */
   const dSpan=Math.max(dMaxR-dMinR,1e-9);
   const fitCx0 = dSpan>0 ? (dMinR+dMaxR)/2 : null;
   const atFit = view.k===1
@@ -1007,20 +998,36 @@ function renderPlane(m,decisions){
     const need=Math.max(spanR, (fitCx-(dMinR-mR))*2, ((dMaxR+mR)-fitCx)*2);
     if(need>spanR){ spanR=need; spanX=spanR/targetRatio; }
   }
-  /* ZOOM = jendela data. k: 1=jendela ~span data; <1=jendela LUAS (thumbnail, angka
-     mengecil, kotak tetap penuh & linear); >1=jendela sempit (detail angka). Pusat
-     jendela (cx,cy) dalam koordinat DATA. toPx memetakan titik -> piksel plot TETAP. */
   const k=Math.min(Math.max(view.k||1,0.12),64);   // clamp defensif (UI juga membatasi)
   const spanRw=spanR/k, spanXw=spanX/k;
   const wcx = fitCx!==null ? fitCx : (view.cx!==undefined && view.cx!==null ? view.cx : cx0);
   const wcy = view.cy!==undefined && view.cy!==null ? view.cy : cy0;
-  view.cx=wcx; view.cy=wcy;   // materialize agar handler zoom/pan selalu punya pusat valid
   const scale=plotH/spanXw;
-  const innerW=spanRw*scale;
-  const cx=padL+innerW/2, cy=padT+plotH/2;
-  const toPx=z=>({ x:padL+((z.R-wcx)/spanRw+0.5)*plotW, y:padT+((wcy-z.X)/spanXw+0.5)*plotH });
-  const pxToR=x=> wcx+(x-padL)/plotW*spanRw-spanRw/2;
-  const pxToX=y=> wcy-(y-padT)/plotH*spanXw+spanXw/2;
+  return {canvasW:VBW,canvasH:VBH,padL,padR,padT,padB,plotW,plotH,
+    spanR,spanX,k,spanRw,spanXw,wcx,wcy,scale,
+    toPx:z=>({x:padL+((z.R-wcx)/spanRw+0.5)*plotW, y:padT+((wcy-z.X)/spanXw+0.5)*plotH}),
+    pxToData:(x,y)=>({R:wcx+(x-padL)/plotW*spanRw-spanRw/2, X:wcy-(y-padT)/plotH*spanXw+spanXw/2})};
+}
+function rxWindow(m){
+  const svg=$('plane');
+  const VBW=Math.round(svg.clientWidth)||640, VBH=Math.round(svg.clientHeight)||470;
+  const win=fitRxWindow(S.ui.view,relayBounds(m),{w:VBW,h:VBH});
+  S.ui.view.cx=win.wcx; S.ui.view.cy=win.wcy;   // materialize (satu-satunya penulis view)
+  return win;
+}
+
+/* ---------- R-X plane (fase GAMBAR murni — window dari modul RxMap) ---------- */
+function renderPlane(m,decisions,win){
+  const svg=$('plane');
+  /* FASE GAMBAR: geometri & transformasi datang dari win (instance rxWindow yang
+     disimpan render() ke svg._map). Di sini TIDAK ada matematika jendela & TIDAK ada
+     penulisan S.ui.view — ubah window hanya lewat fitRxWindow/rxWindow + handler. */
+  const VBW=win.canvasW, VBH=win.canvasH;
+  const padL=win.padL, padR=win.padR, padT=win.padT, padB=win.padB;
+  const plotW=win.plotW, plotH=win.plotH;
+  const scale=win.scale, spanRw=win.spanRw, spanXw=win.spanXw;
+  const toPx=win.toPx;
+  const pxToR=x=>win.pxToData(x,0).R, pxToX=y=>win.pxToData(0,y).X;
 
   let s='';
   /* CLIP hanya untuk KONTEN DATA (zona, wedge beban, titik gangguan). Grid, sumbu,
@@ -1217,8 +1224,8 @@ function renderPlane(m,decisions){
   svg.innerHTML=s;
   /* viewBox = ukuran elemen → koordinat internal 1:1 dgn px CSS (grid & data penuh kartu) */
   if(svg.setAttribute) svg.setAttribute('viewBox',`0 0 ${VBW} ${VBH}`);
-  /* peta jendela utk handler zoom/pan (skala data saat ini) */
-  svg._map={spanR,spanX,cx0,cy0,padL,padT,plotW,plotH};
+  /* svg._map (instance RxMap) diset render() SEBELUM fase gambar — handler zoom/pan
+     memakainya lewat toPx/pxToData (satu pemilik transformasi). */
   /* legenda marker gangguan: cincin hollow = lokasi asli, titik solid = masukan relay */
   $('legend').innerHTML=`
     <span><i style="background:var(--red)"></i>Zone 1</span>
@@ -1554,30 +1561,27 @@ plane.addEventListener('wheel',e=>{
   e.preventDefault();
   const rect=plane.getBoundingClientRect();
   const mx=e.clientX-rect.left, my=e.clientY-rect.top;   // 1:1 dgn koordinat kanvas (viewBox=px)
-  const M=plane._map; if(!M) return;
+  const M=plane._map; if(!M) return;                     // instance RxMap — pemilik transformasi
   const v=S.ui.view, k=v.k||1;
-  const spanRw=M.spanR/k, spanXw=M.spanX/k;
-  /* titik DATA di bawah kursor (pxToR/pxToX): wcx + frac·span − span/2 — TANPA offset */
-  const dR=v.cx + (mx-M.padL)/M.plotW*spanRw - spanRw/2;
-  const dX=v.cy - ((my-M.padT)/M.plotH*spanXw - spanXw/2);
+  const relX=(mx-M.padL)/M.plotW, relY=(my-M.padT)/M.plotH;
+  const pt=M.pxToData(mx,my);                            // titik DATA di bawah kursor (via modul)
   const factor = e.ctrlKey ? pinchZoomFactor(e.deltaY)
                            : wheelZoomFactor(e.deltaY, e.deltaMode||0);
   const kNew=Math.max(0.12,Math.min(64,k*factor));
-  const spanRw2=M.spanR/kNew, spanXw2=M.spanX/kNew;
   /* jaga titik data di bawah kursor tetap pada piksel yang sama (invarian zoom-anchor) */
-  v.cx=dR-( (mx-M.padL)/M.plotW-0.5 )*spanRw2;
-  v.cy=dX+( (my-M.padT)/M.plotH-0.5 )*spanXw2;
   v.k=kNew;
+  v.cx=pt.R-(relX-0.5)*M.spanR/kNew;
+  v.cy=pt.X+(relY-0.5)*M.spanX/kNew;
   render();
 },{passive:false});
 let panning=false,panStart=null;
 plane.addEventListener('pointerdown',e=>{ panning=true; panStart={x:e.clientX,y:e.clientY,cx:S.ui.view.cx,cy:S.ui.view.cy}; plane.style.cursor='grabbing'; });
-window.addEventListener('pointermove',e=>{ if(!panning)return; const rect=plane.getBoundingClientRect();
-  const M=plane._map; if(!M)return;
+window.addEventListener('pointermove',e=>{ if(!panning)return;
+  const M=plane._map; if(!M)return;                     // instance RxMap
   const v=S.ui.view, k=v.k||1;
-  const dRw=M.spanR/k/M.plotW*(e.clientX-panStart.x);
-  const dXw=M.spanX/k/M.plotH*(e.clientY-panStart.y);
-  v.cx=panStart.cx-dRw; v.cy=panStart.cy+dXw;
+  const dx=(e.clientX-panStart.x)/k, dy=(e.clientY-panStart.y)/k;
+  v.cx=panStart.cx-dx*(M.spanR/M.plotW);
+  v.cy=panStart.cy+dy*(M.spanX/M.plotH);
   render(); });
 window.addEventListener('pointerup',()=>{ panning=false; plane.style.cursor='grab'; });
 
@@ -1586,7 +1590,11 @@ function render(){
   const m=computeModel();
   const decisions={};
   S.relays.forEach(r=>decisions[r.id]=r.enabled?decideRelay(r,m):{zone:0,time:null});
-  renderPlane(m,decisions);
+  /* fase-1: window (RxMap) — satu-satunya penulis S.ui.view; instance utk handler */
+  const win=rxWindow(m);
+  const plane=$('plane'); if(plane) plane._map=win;
+  /* fase-2: gambar murni (window dibaca dari win, tak ada penulisan view) */
+  renderPlane(m,decisions,win);
   renderSLD(m);
   updateReadout(m,decisions);
 }
@@ -1658,6 +1666,22 @@ function resetPlaneView(){
   addEventListener('resize',sync);
   document.querySelectorAll('.card-h').forEach(hd=>hd.addEventListener('click',()=>setTimeout(sync,60)));
 })();
+
+/* =========================================================
+   REGISTRY EKSPOR UNTUK TES — SATU-SATUNYA sumber kebenaran
+   daftar `__pub` (HIDUP DI SINI, di aplikasi). tools/lens-harness.js
+   cukup menambahkan `;global.__pub=API;`. Fungsi baru yang perlu
+   diuji cukup ditambahkan DI SINI (dekat definisinya).
+   ========================================================= */
+const API={
+  render, S, P,
+  computeModel, relayZones, relayFaultZ, decideRelay, tripSequence,
+  computeFaultCircuit, flowSegments, charShape, pointIn, shapeBounds,
+  relayBounds, fitRxWindow, rxWindow,
+  wheelZoomFactor, pinchZoomFactor, resetView, syncCollapsedCentering,
+  loadRegion, loadRegionPoints,
+  C, add, sub, scl, mag, ang, fromPolar, deg, rad
+};
 </script>
 </body>
 </html>
