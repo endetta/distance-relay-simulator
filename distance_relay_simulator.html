@@ -1199,7 +1199,6 @@ function renderPlane(m,decisions,win){
   s+=`<line x1="${Os.x}" y1="${Os.y}" x2="${refEnd.x}" y2="${refEnd.y}" stroke="var(--ink-soft)" stroke-width="1" stroke-dasharray="3 3"/>`;
   const fzSel=relayFaultZ(sel,m);
   const zoneColor = decisions[sel.id].zone===0?'var(--green)':ZC[decisions[sel.id].zone];
-  let legAsli=false, legTerukur=false, legRf=false, legErr=false;
   if(!fzSel.behind){
     const pa=toPx(gz(sel,fzSel.zl,m));   // Z asli — di ray saluran
     const pm=toPx(gz(sel,fzSel.zm,m));   // Z terukur — masukan relay
@@ -1207,23 +1206,18 @@ function renderPlane(m,decisions,win){
     if(sep>2){
       /* konektor: zl→z = geseran Rf·infeed (murni horizontal); z→zm = efek error CT/PT */
       const pz=toPx(gz(sel,fzSel.z,m));
-      legRf=true;
       s+=`<line x1="${pa.x}" y1="${pa.y}" x2="${pz.x}" y2="${pz.y}" stroke="var(--copper)" stroke-width="1.6" stroke-dasharray="5 3"/>`;
       if(P.ctErr!==0||P.ptErr!==0){
-        legErr=true;
         s+=`<line x1="${pz.x}" y1="${pz.y}" x2="${pm.x}" y2="${pm.y}" stroke="var(--ink-soft)" stroke-width="1.3" stroke-dasharray="2 3"/>`;
       }
-      legAsli=true;
       s+=`<circle cx="${pa.x}" cy="${pa.y}" r="5.5" fill="var(--surface)" stroke="${zoneColor}" stroke-width="2"/>`;
       const right=pm.x>=pa.x;
       s+=`<text x="${right?pa.x-8:pa.x+8}" y="${pa.y-7}" font-family="JetBrains Mono" font-size="8.5" fill="${zoneColor}" text-anchor="${right?'end':'start'}">asli</text>`;
       s+=`<text x="${right?pm.x+8:pm.x-8}" y="${pm.y+12}" font-family="JetBrains Mono" font-size="8.5" fill="${zoneColor}" text-anchor="${right?'start':'end'}">terukur</text>`;
     } else {
       /* Rf=0 & tanpa error CT/PT ⇒ asli & terukur berimpit — tunjukkan lewat cincin luar */
-      legAsli=true;
       s+=`<circle cx="${pm.x}" cy="${pm.y}" r="8" fill="none" stroke="${zoneColor}" stroke-width="1.4" opacity=".8"/>`;
     }
-    legTerukur=true;
     s+=`<circle cx="${pm.x}" cy="${pm.y}" r="4.5" fill="${zoneColor}" stroke="var(--surface)" stroke-width="1.2"/>`;
   }
   if(edgeHint) s+=edgeHint;   // panah penuding sistem bila titik di luar jendela
@@ -1234,16 +1228,12 @@ function renderPlane(m,decisions,win){
   if(svg.setAttribute) svg.setAttribute('viewBox',`0 0 ${VBW} ${VBH}`);
   /* svg._map (instance RxMap) diset render() SEBELUM fase gambar — handler zoom/pan
      memakainya lewat toPx/pxToData (satu pemilik transformasi). */
-  /* legenda marker gangguan: cincin hollow = lokasi asli, titik solid = masukan relay */
+  /* legenda: hanya Zone 1/2/3 (disederhanakan atas permintaan user — lensa beban,
+     titik sistem, Z asli/terukur, geseran Rf & error CT/PT tak lagi punya entri) */
   $('legend').innerHTML=`
     <span><i style="background:var(--red)"></i>Zone 1</span>
     <span><i style="background:var(--copper)"></i>Zone 2</span>
-    <span><i style="background:var(--blue)"></i>Zone 3</span>
-    ${P.showLoad?`<span><i style="border:1.5px dashed var(--green);background:var(--green);opacity:.25;width:10px;height:10px;border-radius:50%"></i>Lensa beban</span><span><i style="background:var(--green);width:8px;height:8px;border-radius:50%"></i>Titik sistem normal</span>`:''}
-    ${legAsli?`<span><i style="border:2px solid ${zoneColor};background:var(--surface);width:8px;height:8px;border-radius:50%"></i>Z asli (${sel.id}, di saluran)</span>`:''}
-    ${legTerukur?`<span><i style="background:${zoneColor}"></i>Z terukur (masuk relay)</span>`:''}
-    ${legRf?`<span><i style="border-top:2px dashed var(--copper);height:0;width:12px;background:none"></i>geseran Rf·infeed</span>`:''}
-    ${legErr?`<span><i style="border-top:2px dotted var(--ink-soft);height:0;width:12px;background:none"></i>error CT/PT</span>`:''}`;
+    <span><i style="background:var(--blue)"></i>Zone 3</span>`;
 }
 
 /* ---------- single-line diagram dengan 4 relay ---------- */
@@ -1543,11 +1533,13 @@ function updateReadout(m,decisions){
    cx/cy = pusat jendela dlm koordinat data. */
 const plane=$('plane');
 /* Faktor zoom roda LANDAI & proporsional jarak gulir (bukan 1.15× per event — trackpad
-   memicu banyak event kecil sehingga dulu terlalu sensitif). 100 px gulir = ×1.15;
+   memicu banyak event kecil sehingga dulu terlalu sensitif). 100 px gulir ke ATAS
+   (deltaY<0) = zoom IN ×1.15 — konvensi umum (scroll atas = mendekat); tanda negatif
+   membalik perilaku lama yg terbalik (scroll bawah malah zoom in).
    deltaMode dinormalisasi: 0 piksel, 1 garis (≈16 px), 2 halaman (≈400 px). */
 function wheelZoomFactor(deltaY, deltaMode){
   const px = deltaMode===1 ? deltaY*16 : deltaMode===2 ? deltaY*400 : deltaY;
-  return Math.pow(1.15, px/100);
+  return Math.pow(1.15, -px/100);
 }
 /* Zoom dua-jari touchpad — browser mengirimnya sbg event wheel dgn ctrlKey=true
    (deltaY kecil, deltaMode 0). Arah: di Chrome renggangan jari (zoom IN) hadir sbg

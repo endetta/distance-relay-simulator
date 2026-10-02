@@ -1,6 +1,10 @@
 /* Tes TDD bidang R–X (revisi sesi):
    (A) wheelZoomFactor — zoom roda: ±15% per 100 px gulir (deltaMode dinormalisasi),
-       tetap landai per-event trackpad (bukan 1.15× per event).
+       tetap landai per-event trackpad (bukan 1.15× per event). ARAH KONVENSI UMUM:
+       gulir ke ATAS (deltaY<0) = zoom IN, gulir ke BAWAH (deltaY>0) = zoom OUT
+       (perilaku lama terbalik — scroll bawah malah zoom in).
+   (A2) legend disederhanakan: hanya Zone 1/2/3 (tanpa Lensa beban, Titik sistem,
+       Z asli/terukur, geseran Rf, error CT/PT) di semua skenario.
    (B) pinchZoomFactor — zoom dua-jari (wheel dgn ctrlKey): RENGGANGKAN jari (deltaY<0
        di Chrome) = zoom IN, arah dibalik dari perilaku lama yg terbalik; kuat-menengah
        ≈ ×1.08 per 10 px; simetris f(−x)=1/f(x).
@@ -51,25 +55,25 @@ function tickNums(svg, VBH) {
   return { r, x: x.map(t => t.v) };
 }
 
-/* ============ Seam A: wheelZoomFactor (±15% per 100 px gulir) ============ */
-console.log('\nwheelZoomFactor — sensitivitas zoom roda');
+/* ============ Seam A: wheelZoomFactor (arah konvensi umum: atas = IN) ============ */
+console.log('\nwheelZoomFactor — sensitivitas zoom roda (gulir atas = zoom in)');
 {
   const { pub } = load();
   const f = pub.wheelZoomFactor;
-  check('100 px gulir (deltaMode 0) = ×1.15', () => approx(f(100, 0), 1.15, 'f(100)', 1e-9));
-  check('gulir balik simetris: f(−100,0) = 1/1.15', () => approx(f(-100, 0), 1 / 1.15, 'f(-100)', 1e-12));
+  check('100 px gulir ke ATAS (deltaY −100) = zoom IN ×1.15', () => approx(f(-100, 0), 1.15, 'f(-100)', 1e-9));
+  check('gulir balik simetris: f(+100,0) = zoom OUT 1/1.15', () => approx(f(100, 0), 1 / 1.15, 'f(+100)', 1e-12));
   check('tanpa gulir = 1', () => approx(f(0, 0), 1, 'f(0)', 0));
   check('mode garis (deltaMode 1) dinormalisasi ≈16 px/garis → f(1,1) = f(16,0)', () =>
     approx(f(1, 1), f(16, 0), 'line-mode', 1e-12));
   check('mode halaman (deltaMode 2) dinormalisasi ≈400 px → f(1,2) = f(400,0)', () =>
     approx(f(1, 2), f(400, 0), 'page-mode', 1e-12));
-  check('trackpad tetap landai per event kecil: f(5px)−1 < 0.008 & f(50px)−1 < 0.075', () => {
-    if (!(f(5, 0) - 1 < 0.008)) throw new Error(`f(5)=${f(5, 0)} terlalu besar per event`);
-    if (!(f(50, 0) - 1 < 0.075)) throw new Error(`f(50)=${f(50, 0)} terlalu besar`);
-    if (!(f(100, 0) - 1 <= 0.15)) throw new Error('100px tidak boleh melebihi zoom lama 1.15/event');
+  check('trackpad tetap landai per event kecil: f(−5px)−1 < 0.008 & f(−50px)−1 < 0.075', () => {
+    if (!(f(-5, 0) - 1 < 0.008)) throw new Error(`f(-5)=${f(-5, 0)} terlalu besar per event`);
+    if (!(f(-50, 0) - 1 < 0.075)) throw new Error(`f(-50)=${f(-50, 0)} terlalu besar`);
+    if (!(f(-100, 0) - 1 <= 0.15)) throw new Error('100px tidak boleh melebihi zoom lama 1.15/event');
   });
-  check('monoton naik thd jarak gulir positif', () => {
-    for (const d of [0.1, 10, 40, 90]) if (!(f(d + 1, 0) > f(d, 0))) throw new Error('tidak monoton');
+  check('monoton: makin jauh gulir ke atas makin besar zoom-nya', () => {
+    for (const d of [0.1, 10, 40, 90]) if (!(f(-(d + 1), 0) > f(-d, 0))) throw new Error('tidak monoton');
   });
 }
 
@@ -277,6 +281,29 @@ const BNDS = { minR:0, maxR:4, minX:0, maxX:2.9423728814, dMinR:1, dMaxR:3 };
     const view = rx.pub.S.ui.view;
     if (!(typeof view.cx === 'number' && typeof view.cy === 'number')) throw new Error('cx/cy tidak ter-materialisasi');
   });
+}
+
+/* ============ Seam A2: legend hanya Zone 1/2/3 (disederhanakan) ============ */
+console.log('\nlegend — hanya Zone 1/2/3 di semua skenario');
+{
+  const checkLegend = (setupFn, name) => {
+    const ctx = load();
+    if (setupFn) setupFn(ctx);
+    ctx.pub.render();
+    const legend = ctx.els.legend.innerHTML;
+    check(`${name}: memuat Zone 1/2/3`, () => {
+      contains(legend, 'Zone 1', 'zone1'); contains(legend, 'Zone 2', 'zone2'); contains(legend, 'Zone 3', 'zone3');
+    });
+    check(`${name}: TANPA entri lensa/titik/Z/Rf/CT-PT`, () => {
+      notContains(legend, 'Lensa beban', 'lensa'); notContains(legend, 'Titik sistem', 'titik');
+      notContains(legend, 'Z asli', 'asli'); notContains(legend, 'Z terukur', 'terukur');
+      notContains(legend, 'geseran Rf', 'rf'); notContains(legend, 'error CT/PT', 'ctpt');
+    });
+  };
+  checkLegend(null, 'default');
+  checkLegend(ctx => { ctx.pub.P.showLoad = false; }, 'showLoad=off');
+  checkLegend(ctx => { ctx.pub.P.rf = 5; }, 'Rf=5 (punya garis geseran)');
+  checkLegend(ctx => { ctx.pub.P.ctErr = 5; ctx.pub.P.ptErr = 5; }, 'error CT/PT 5%');
 }
 
 console.log(`\n${passed} lulus, ${failed} gagal`);
