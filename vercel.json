@@ -1,5 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
-  "rewrites": [{ "source": "/", "destination": "/distance_relay_simulator.html" }]
+  "rewrites": [{ "source": "/", "destination": "/distance_relay_simulator" }]
 }
