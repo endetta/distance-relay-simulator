@@ -267,6 +267,8 @@
     <span class="tt"><span class="tt-a">Simulator Distance Relay</span><span class="tt-b">by Sheva - Endetta</span></span>
     <button class="mini-btn hl" id="collapseAll">Ciutkan semua</button>
     <button class="mini-btn hl" id="expandAll">Buka semua</button>
+    <button class="mini-btn on" id="frameGlobal" title="Bidang global: Bus A = 0">Global</button>
+    <button class="mini-btn" id="frameRelay" title="Origin = bus relay terpilih">Relay</button>
   </div>
 
   <div class="layout">
@@ -466,7 +468,6 @@ const deg=r=>r*180/Math.PI, rad=d=>d*Math.PI/180;
 const fmt=(n,d=2)=>Number(n).toFixed(d);
 /* display transform: rev relay diputar 180° (×−1 pada R dan X) agar zonanya tampak di kuadran kiri */
 const dz=(z,dir)=> dir==='rev' ? C(-z.R,-z.X) : z;
-
 /* ---------- state ---------- */
 const defaultRelay=(id,name,bus,direction,lineRef)=>({
   id,name,bus,direction,lineRef,
@@ -492,6 +493,7 @@ let S={
     defaultRelay('R4','Relay Bus C → Bus B','C','rev','L2')
   ],
   selectedRelayId:'R1',
+  frame:'global',   // frame diagram: 'global' (Bus A=0) | 'relay' (origin = bus relay terpilih)
   ui:{ view:{k:1,cx:0,cy:0}, collapsed:{} }
 };
 const P=S.param;
@@ -519,6 +521,16 @@ function setupGroup(groupId,fn){
 setupGroup('faultTypeGroup',v=>{P.faultType=v;});
 /* mode kartu kanan: 'relay' = detail relay terpilih; 'seq' = urutan trip seluruh relay */
 setupGroup('sideModeGroup',v=>{P.sideMode=v;});
+/* mode frame diagram: 'global' (Bus A=0) | 'relay' (origin = bus relay terpilih).
+   Ganti frame = reset view (fit ulang ke konten frame baru). */
+function setFrame(f){
+  S.frame=f;
+  $('frameGlobal').classList.toggle('on',f==='global');
+  $('frameRelay').classList.toggle('on',f==='relay');
+  resetView();
+}
+$('frameGlobal').addEventListener('click',()=>setFrame('global'));
+$('frameRelay').addEventListener('click',()=>setFrame('relay'));
 
 bindRange('l1','l1','',0); bindRange('l2','l2','',0);
 bindRange('pos','pos','',0); bindRange('rf','rf','',0); bindRange('xf','xf','',0);
@@ -576,7 +588,7 @@ function buildRelayList(){
     div.innerHTML=`<span class="sw"></span><span class="nm">${r.name}<small>${r.bus} · ${r.direction==='fwd'?'→':'←'} ${r.charType}</small></span><span class="gear">⚙</span>`;
     div.addEventListener('click',e=>{
       if(e.target.classList.contains('gear')){ openModal(r); }
-      else { S.selectedRelayId=r.id; document.querySelectorAll('.relay-item').forEach(x=>x.classList.toggle('sel',x.dataset.rel===r.id)); render(); }
+      else { S.selectedRelayId=r.id; document.querySelectorAll('.relay-item').forEach(x=>x.classList.toggle('sel',x.dataset.rel===r.id)); if(S.frame==='relay'){resetView();}else{render();} }
     });
     const sw=div.querySelector('.sw');
     sw.title='Klik untuk nyala/matikan';
@@ -591,6 +603,13 @@ function refreshRelayList(){
     d.classList.toggle('off',!r.enabled);
     d.querySelector('.nm small').textContent=`${r.bus} · ${r.direction==='fwd'?'→':'←'} ${r.charType}`;
   });
+  syncFrameToggle();
+}
+function syncFrameToggle(){
+  const g=$('frameGlobal'), q=$('frameRelay');
+  if(!g||!q) return;
+  g.classList.toggle('on',S.frame==='global');
+  q.classList.toggle('on',S.frame==='relay');
 }
 
 /* ---------- modal ---------- */
@@ -792,10 +811,21 @@ function relayOrigin(relay,m){
   if(relay.bus==='B') return m.Z1;
   return add(m.Z1,m.Z2);
 }
-/* Mapping koordinat frame relay -> bidang global.
+/* Mapping koordinat frame relay -> bidang GLOBAL dikurangi origin relay TERPILIH
+   saat S.frame==='relay' (relay terpilih jadi 0,0); S.frame==='global' = Bus A = 0.
    fwd: zona membentang menjauh dari bus (+arah saluran). rev: membentang kebalikannya
    (point-reflection thd origin bus) sehingga R3 di Bus B menghadap kiri-bawah. */
-const gz=(relay,z,m)=> relay.direction==='fwd' ? add(relayOrigin(relay,m), z) : sub(relayOrigin(relay,m), z);
+function selOrg(m){ return relayOrigin(S.relays.find(r=>r.id===S.selectedRelayId),m); }
+const gz=(relay,z,m)=>{
+  const o=relay.direction==='fwd' ? add(relayOrigin(relay,m),z) : sub(relayOrigin(relay,m),z);
+  return S.frame==='relay' ? sub(o,selOrg(m)) : o;
+};
+/* titik GLOBAL (bus A/B/C, dsb.) -> frame tampil: dikurangi origin relay terpilih di
+   mode 'relay', biarkan apa adanya di mode 'global'. */
+const glPt=(pt,m)=> S.frame==='relay' ? sub(pt,selOrg(m)) : pt;
+/* penanda bus relay: asal relay sudah masuk offset gz — di sini cukup origin globalnya
+   dipetakan ke frame tampil (sedikit lebih murah ketimbang glPt). */
+const glOrigin=(r,m)=> S.frame==='relay' ? sub(relayOrigin(r,m),selOrg(m)) : relayOrigin(r,m);
 function decideRelay(relay,m){
   const zone=relayZones(relay,m);
   const fz=relayFaultZ(relay,m);
@@ -971,7 +1001,12 @@ function relayBounds(m){
     const zone=relayZones(r,m);
     [zone.zone1,zone.zone2,zone.zone3].forEach(zn=>{
       const b=shapeBounds(charShape(r,zn,zone,m));
-      grow(C(b.minR,b.minX)); grow(C(b.maxR,b.maxX));
+      if(S.frame==='relay'){
+        /* frame lokal: bounds dari posisi DIGAMBAR (konsisten dgn dgrow) */
+        [C(b.minR,b.minX),C(b.maxR,b.maxX),C(b.minR,b.maxX),C(b.maxR,b.minX)].forEach(p=>grow(gz(r,p,m)));
+      } else {
+        grow(C(b.minR,b.minX)); grow(C(b.maxR,b.maxX));
+      }
       [C(b.minR,b.minX),C(b.maxR,b.maxX),C(b.minR,b.maxX),C(b.maxR,b.minX)].forEach(p=>dgrow(gz(r,p,m)));
     });
     const fzr=relayFaultZ(r,m);
@@ -1081,7 +1116,7 @@ function renderPlane(m,decisions,win){
      busur = |Z| yang MUNGKIN saat sehat — titik sistem normal (zlNow) berfluktuasi
      di dalamnya. */
   let edgeHint='';
-  if(P.showLoad){
+  if(P.showLoad && S.frame==='global'){
     const la=rad(P.pfAngleDeg+P.loadEncroachDeg);
     const rIn=m.loadzMin, rOut=m.loadzNom;
     const {pts,L}=loadRegionPoints(rIn,rOut,la);
@@ -1167,7 +1202,7 @@ function renderPlane(m,decisions,win){
       s+=shapeSVG(zone.zone1,0.13,'0',rt?2:1.6,ZC[1]);
     }
     /* penanda lokasi bus relay */
-    const Op=toPx(relayOrigin(r,m));
+    const Op=toPx(glOrigin(r,m));
     s+=`<circle cx="${Op.x}" cy="${Op.y}" r="3" fill="none" stroke="var(--ink-soft)" stroke-width="1"/>`;
     s+=`<text x="${Op.x+5}" y="${Op.y-4}" font-family="JetBrains Mono" font-size="8.5" fill="${rt?'var(--blue)':'var(--ink-soft)'}" font-weight="${rt?700:400}">${r.id}</text>`;
   });
@@ -1180,7 +1215,7 @@ function renderPlane(m,decisions,win){
     {t:'C',p:add(m.Z1,m.Z2)}
   ];
   busPts.forEach(bpt=>{
-    const bp=toPx(bpt.p), bx=bp.x, by=bp.y, d=5;
+    const bp=toPx(glPt(bpt.p,m)), bx=bp.x, by=bp.y, d=5;
     const flip= bx>padL+plotW-26;   // label pindah ke kiri bila titik dekat tepi kanan jendela
     s+=`<rect x="${bx-d}" y="${by-d}" width="${d*2}" height="${d*2}" transform="rotate(45 ${bx} ${by})" fill="var(--ink)" opacity="0.88" stroke="var(--surface)" stroke-width="1"/>`;
     s+=`<text x="${flip?bx-d-3:bx+d+3}" y="${by+3}" font-family="JetBrains Mono" font-size="9.5" fill="var(--ink)" font-weight="700" text-anchor="${flip?'end':'start'}">${bpt.t}</text>`;
@@ -1194,7 +1229,7 @@ function renderPlane(m,decisions,win){
                  bukan radial, jadi konektor asli→terukur-lah yang menunjukkan penyimpangannya. */
   const sel=S.relays.find(r=>r.id===S.selectedRelayId);
   const zoneSel=relayZones(sel,m);
-  const Os=toPx(relayOrigin(sel,m));
+  const Os=toPx(glOrigin(sel,m));
   const refEnd=toPx(gz(sel,fromPolar(mag(zoneSel.zone3)*1.05,sel.lineRef==='L1'?m.lineAngle:ang(m.Z2)),m));
   s+=`<line x1="${Os.x}" y1="${Os.y}" x2="${refEnd.x}" y2="${refEnd.y}" stroke="var(--ink-soft)" stroke-width="1" stroke-dasharray="3 3"/>`;
   const fzSel=relayFaultZ(sel,m);
@@ -1674,10 +1709,10 @@ function resetPlaneView(){
    diuji cukup ditambahkan DI SINI (dekat definisinya).
    ========================================================= */
 const API={
-  render, S, P,
+  render, S, P, setFrame,
   computeModel, relayZones, relayFaultZ, decideRelay, tripSequence,
   computeFaultCircuit, flowSegments, charShape, pointIn, shapeBounds,
-  relayBounds, fitRxWindow, rxWindow,
+  relayOrigin, relayBounds, fitRxWindow, rxWindow,
   wheelZoomFactor, pinchZoomFactor, resetView, syncCollapsedCentering,
   loadRegion, loadRegionPoints,
   C, add, sub, scl, mag, ang, fromPolar, deg, rad
