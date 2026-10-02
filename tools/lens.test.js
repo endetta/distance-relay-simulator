@@ -7,14 +7,12 @@
      3. Titik sistem NORMAL DINAMIS: mengelilingi zlNow dalam ellipse kecil via
         <animateMotion> (path tertutup M…Z), ellipse tetap DI DALAM lensa. */
 'use strict';
-import test from 'node:test';
-import assert from 'node:assert';
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
-const require_ = createRequire(import.meta.url);
-const { loadSimulator, planeSvg } = require_('./lens-harness.js');
+const test = require('node:test');
+const assert = require('node:assert');
+const path = require('path');
+const { loadSimulator, planeSvg } = require('./lens-harness.js');
 
-const FILE = fileURLToPath(new URL('../distance_relay_simulator.html', import.meta.url));
+const FILE = path.join(__dirname, '..', 'distance_relay_simulator.html');
 
 let ctx;
 test.before(() => { ctx = loadSimulator(FILE); });

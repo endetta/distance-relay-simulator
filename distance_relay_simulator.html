@@ -133,6 +133,11 @@
     -moz-user-select:none;
     user-select:none;
   }
+  /* Teks label SLD tak boleh menangkap pointer: label dirender PALING AKHIR
+     (menimpa kotak relay/handle fault), jadi klik yg kena glyph label R2 / label
+     Sumber / chip V-I nyasar jadi pan/drag alih-alih nyala/matikan relay —
+     gejala lama: "harus diklik berkali-kali baru relay mau mati/nyala". */
+  #sld text{pointer-events:none;}
   .toolbar{display:flex;gap:6px;align-items:center;margin-bottom:8px;}
   .toolbar .sp{flex:1;}
   .legend{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:var(--ink-soft);margin-top:8px;font-family:'JetBrains Mono',monospace;}
@@ -182,7 +187,10 @@
   .relay-item:hover{border-color:var(--blue);}
   .relay-item.sel{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue);}
   .relay-item.off{opacity:.45;}
-  .relay-item .sw{width:9px;height:9px;border-radius:50%;flex:none;background:var(--green);}
+  .relay-item .sw{position:relative;width:9px;height:9px;border-radius:50%;flex:none;background:var(--green);}
+  /* Hitbox diperbesar (±8px tiap sisi → ~25px) tanpa ubah visual 9px:
+     dot terlalu kecil untuk diklik presisi — gejala "harus ditekatkan". */
+  .relay-item .sw::after{content:'';position:absolute;inset:-8px;}
   .relay-item .nm{font-size:12px;flex:1;line-height:1.25;}
   .relay-item .nm small{display:block;color:var(--ink-soft);font-size:10px;font-family:'JetBrains Mono',monospace;}
   .relay-item .gear{flex:none;font-size:12px;padding:3px 7px;border-radius:6px;background:var(--blue-soft);color:var(--blue);font-family:'JetBrains Mono',monospace;}
