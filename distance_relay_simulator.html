@@ -1016,7 +1016,7 @@ function relayBounds(m){
   if(maxR<=minR){maxR=1;} if(maxX<=minX){maxX=1;}
   return {minR,maxR,minX,maxX,dMinR,dMaxR};
 }
-function fitRxWindow(view,bounds,canvas){
+function fitRxWindow(view,bounds,canvas,originCenter){
   const VBW=canvas.w||640, VBH=canvas.h||470;
   const padL=RX_PADS.L,padR=RX_PADS.R,padT=RX_PADS.T,padB=RX_PADS.B;
   const plotW=VBW-padL-padR, plotH=VBH-padT-padB;
@@ -1027,11 +1027,16 @@ function fitRxWindow(view,bounds,canvas){
   if(spanR/spanX<targetRatio){const extra=spanX*targetRatio-spanR; maxR+=extra*0.85; minR-=extra*0.15;}
   else{const extra=spanR/targetRatio-spanX; maxX+=extra;}
   spanR=maxR-minR; spanX=maxX-minX;
-  const cx0=(minR+maxR)/2, cy0=(minX+maxX)/2;   // pusat data (frame)
+  /* Frame relay (originCenter): pusat jendela DIKUNCI ke origin relay terpilih (data 0,0),
+     BUKAN ke sentroid konten. Tanpa kunci ini, ganti relay = konten bergeser −selOrg
+     (via gz/glPt) DAN jendela ikut re-fit ke sentroid konten yang bergeser sama persis
+     → kedua translasi saling meniadakan → zona/relay/bus tampak BEKU di piksel sama
+     (hanya sumbu & angka tick yang bergeser) — bug fatal mode frame Relay. */
+  const cx0=originCenter?0:(minR+maxR)/2, cy0=originCenter?0:(minX+maxX)/2;   // pusat data (frame)
   const WIDE=0.75;
   spanR*=WIDE; spanX*=WIDE;
   const dSpan=Math.max(dMaxR-dMinR,1e-9);
-  const fitCx0 = dSpan>0 ? (dMinR+dMaxR)/2 : null;
+  const fitCx0 = originCenter ? 0 : (dSpan>0 ? (dMinR+dMaxR)/2 : null);
   const atFit = view.k===1
     && (view.cy===undefined||view.cy===null||view.cy===0)
     && (view.cx===undefined||view.cx===null||view.cx===0 || (fitCx0!==null && Math.abs(view.cx-fitCx0)<1e-6));
@@ -1054,7 +1059,7 @@ function fitRxWindow(view,bounds,canvas){
 function rxWindow(m){
   const svg=$('plane');
   const VBW=Math.round(svg.clientWidth)||640, VBH=Math.round(svg.clientHeight)||470;
-  const win=fitRxWindow(S.ui.view,relayBounds(m),{w:VBW,h:VBH});
+  const win=fitRxWindow(S.ui.view,relayBounds(m),{w:VBW,h:VBH},S.frame==='relay');
   S.ui.view.cx=win.wcx; S.ui.view.cy=win.wcy;   // materialize (satu-satunya penulis view)
   return win;
 }
